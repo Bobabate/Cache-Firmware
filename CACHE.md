@@ -28,6 +28,10 @@ Version 1 is a branded, buildable MeshCore Room Server baseline. It intentionall
 adds no cache-specific interaction rules. This gives the project a small,
 testable starting point before access controls or game behaviour are designed.
 
+The first hardware target is the Heltec MeshPocket. Its e-ink display, Nordic
+nRF52840 platform, radio configuration, and power behaviour are inherited from
+the upstream MeshCore Room Server target.
+
 ## Compatibility policy
 
 - Stay close to upstream MeshCore Room Server.

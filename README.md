@@ -9,19 +9,19 @@ features can be added carefully later.
 is the working name of the first geocache installation; it is not the firmware
 or repository name.
 
-The first radio board has not been selected yet. Cache Firmware will initially
-store and distribute Room Server posts using the standard MeshCore client
-protocol.
+The first target is the Heltec MeshPocket. Cache Firmware initially stores and
+distributes Room Server posts using the standard MeshCore client protocol.
 
 ## Current scope
 
 - Upstream MeshCore Room Server behaviour.
+- Dedicated `Cache_mesh_pocket_room_server` build target.
 - Firmware identity `Cache v1.17.1-C1`.
-- Default node name `Cache`.
+- Default node name `Recursive Cache`.
 - Upstream MeshCore radio defaults.
 - Standard initial administrator password `password`.
 - Standard initial room password `hello`.
-- Hardware target and image formats to be chosen with the first radio board.
+- MeshPocket UF2 and ZIP firmware packages.
 
 Change both public development passwords during provisioning. Normal
 application-image updates preserve stored device configuration. A merged image
@@ -34,8 +34,14 @@ puzzles, hints, finder records, geocache commands, or channel announcements.
 
 ## Build
 
-The dedicated Cache build target and GitHub Actions workflow will be added
-after the first radio board is selected.
+Install PlatformIO and run:
+
+```sh
+./build_cache_mesh_pocket.sh
+```
+
+The build produces UF2 and ZIP packages for the MeshPocket. GitHub Actions can
+run the same build and provide temporary downloadable artifacts.
 
 ## Configure
 

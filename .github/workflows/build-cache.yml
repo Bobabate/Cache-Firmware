@@ -1,0 +1,45 @@
+name: Build Cache Firmware
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Cache Firmware
+        uses: actions/checkout@v6
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-environment
+
+      - name: Report PlatformIO version
+        run: pio --version
+
+      - name: Build MeshPocket
+        env:
+          FIRMWARE_VERSION: v1.17.1-C1
+        run: ./build.sh build-firmware Cache_mesh_pocket_room_server
+
+      - name: Verify and checksum firmware
+        shell: bash
+        run: |
+          shopt -s nullglob
+          uf2=(out/Cache_mesh_pocket_room_server-*.uf2)
+          zip=(out/Cache_mesh_pocket_room_server-*.zip)
+          if (( ${#uf2[@]} != 1 || ${#zip[@]} != 1 )); then
+            echo "Cache build must contain one UF2 and one ZIP package" >&2
+            exit 1
+          fi
+          sha256sum "${uf2[@]}" "${zip[@]}" | tee out/SHA256SUMS.txt
+
+      - name: Upload Cache firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: Cache-MeshPocket-${{ github.run_number }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
