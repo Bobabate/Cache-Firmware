@@ -35,7 +35,7 @@ void UITask::begin(NodePrefs* node_prefs, mesh::MainBoard* board, const char* bu
 
 #ifdef CACHE_FIRMWARE
   // Cache Firmware's identity is part of the permanent cache display.
-  snprintf(_version_info, sizeof(_version_info), "%s", firmware_version);
+  snprintf(_version_info, sizeof(_version_info), "Cache %s", firmware_version);
 #else
   // strip off dash and commit hash by changing dash to null terminator
   // e.g: v1.2.3-abcdef -> v1.2.3
