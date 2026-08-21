@@ -71,6 +71,9 @@ channel announcements remain possible future features.
 
 ## Todo
 
+- [ ] In the next MeshPocket Cache build, change the routine cache-screen check
+  from once per minute to once every 10 minutes. Preserve the e-paper CRC check
+  so a physical refresh still occurs only when displayed content has changed.
 - [x] Reorder the interactive MeshPocket cache display so the configured
   cache name is at the top, followed by a double-size `Finds: N` count, then
   battery level, with the complete Cache Firmware version on the bottom line.
