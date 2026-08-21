@@ -7,3 +7,5 @@
 - Retain standard Room Server behaviour, radio defaults, and initial passwords.
 - Add a manual GitHub Actions test-build workflow producing UF2 and ZIP
   packages.
+- Add a persistent MeshPocket screen showing the complete firmware version,
+  configured cache name, and battery percentage and voltage.

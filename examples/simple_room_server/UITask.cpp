@@ -26,12 +26,17 @@ static const uint8_t meshcore_logo [] PROGMEM = {
     0xe3, 0xe3, 0x8f, 0xff, 0x1f, 0xfc, 0x3c, 0x0e, 0x1f, 0xf8, 0xff, 0xf8, 0x70, 0x3c, 0x7f, 0xf8, 
 };
 
-void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* firmware_version) {
+void UITask::begin(NodePrefs* node_prefs, mesh::MainBoard* board, const char* build_date, const char* firmware_version) {
   _prevBtnState = HIGH;
   _auto_off = millis() + AUTO_OFF_MILLIS;
   _node_prefs = node_prefs;
+  _board = board;
   _display->turnOn();
 
+#ifdef CACHE_FIRMWARE
+  // Cache Firmware's identity is part of the permanent cache display.
+  snprintf(_version_info, sizeof(_version_info), "%s", firmware_version);
+#else
   // strip off dash and commit hash by changing dash to null terminator
   // e.g: v1.2.3-abcdef -> v1.2.3
   char *version = strdup(firmware_version);
@@ -43,10 +48,31 @@ void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* fi
   // v1.2.3 (1 Jan 2025)
   snprintf(_version_info, sizeof(_version_info), "%s (%s)", version, build_date);
   free(version);
+#endif
 }
 
 void UITask::renderCurrScreen() {
   char tmp[80];
+#ifdef CACHE_FIRMWARE
+  _display->setTextSize(1);
+  _display->setColor(UIColor::primary_txt);
+
+  _display->setCursor(0, 0);
+  _display->print(_version_info);
+
+  _display->drawTextEllipsized(0, 20, _display->width(), _node_prefs->node_name);
+
+  const int minMilliVolts = 3000;
+  const int maxMilliVolts = 4200;
+  const uint16_t batteryMilliVolts = _board->getBattMilliVolts();
+  int batteryPercentage = ((int)batteryMilliVolts - minMilliVolts) * 100 / (maxMilliVolts - minMilliVolts);
+  if (batteryPercentage < 0) batteryPercentage = 0;
+  if (batteryPercentage > 100) batteryPercentage = 100;
+  snprintf(tmp, sizeof(tmp), "Battery: %d%%  %u.%02uV", batteryPercentage,
+           batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
+  _display->setCursor(0, 40);
+  _display->print(tmp);
+#else
   if (millis() < BOOT_SCREEN_MILLIS) { // boot screen
     // meshcore logo
     _display->setColor(UIColor::corp_blue);
@@ -89,6 +115,7 @@ void UITask::renderCurrScreen() {
     sprintf(tmp, "BW: %03.2f CR: %d", _node_prefs->bw, _node_prefs->cr);
     _display->print(tmp);
   }
+#endif
 }
 
 void UITask::loop() {
@@ -116,10 +143,17 @@ void UITask::loop() {
       renderCurrScreen();
       _display->endFrame();
 
-      _next_refresh = millis() + 1000;   // refresh every second
+      _next_refresh = millis()
+#ifdef CACHE_FIRMWARE
+        + 60000;  // keep battery current without needlessly refreshing e-paper
+#else
+        + 1000;   // refresh every second
+#endif
     }
+#ifndef CACHE_FIRMWARE
     if (millis() > _auto_off) {
       _display->turnOff();
     }
+#endif
   }
 }

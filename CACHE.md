@@ -32,6 +32,18 @@ The first hardware target is the Heltec MeshPocket. Its e-ink display, Nordic
 nRF52840 platform, radio configuration, and power behaviour are inherited from
 the upstream MeshCore Room Server target.
 
+## Required cache display
+
+Cache Firmware keeps a simple, persistent screen showing:
+
+- the complete Cache Firmware name and version;
+- the configured cache name; and
+- the battery level as both a percentage and voltage.
+
+These are permanent Cache Firmware requirements and must not be removed. The
+display remains visible and updates the battery reading once per minute. This
+Cache-specific screen does not change the upstream Room Server display.
+
 ## Compatibility policy
 
 - Stay close to upstream MeshCore Room Server.
