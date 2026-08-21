@@ -16,41 +16,67 @@ installable firmware.
 ---
 
 Cache Firmware is a standalone MeshCore Room Server firmware project for
-location-based radio caches. It began with ordinary upstream Room Server
-behaviour and is adding the cache interaction carefully, one board at a time.
+location-based radio caches. Visitors connect directly over the mesh, read the
+recent finder log, and leave one log entry every 24 hours.
 
-The current cache interaction is available on the Heltec MeshPocket only. The
-Heltec WiFi LoRa 32 V3 remains at the original C1 Room Server behaviour.
+The current release is **v1.17.1-C5**.
 
-## Current scope
+## Supported hardware
 
-- Upstream MeshCore Room Server behaviour.
-- Dedicated MeshPocket and Heltec V3 build targets.
-- Firmware identity `Cache v1.17.1-C5`.
-- Ordinary upstream Room Server node names on clean installation; set the
-  cache's real name during configuration.
-- Upstream MeshCore radio defaults.
-- Standard initial administrator password `password`.
-- Standard initial room password `hello`.
-- MeshPocket UF2/ZIP packages and Heltec V3 application/merged BIN packages.
+- **Heltec MeshPocket:** complete interactive cache behaviour.
+- **Heltec WiFi LoRa 32 V3:** Cache-branded Room Server baseline. Interactive
+  finder-log behaviour is not enabled on this board.
 
-The current MeshPocket release adds:
+Release packages contain MeshPocket UF2/ZIP files and Heltec V3
+application/merged BIN files.
 
-- up to 100 posts preserved across ordinary reboots and power loss;
-- no automatic delivery of newly added posts to other clients;
-- a short instruction message when a visitor connects;
-- the newest three posts, with `!older`, `!newer`, and `!latest` navigation;
-- `!help`, `!found`, and `!edit <text>` visitor commands;
-- a clear duplicate-entry warning instead of silently treating a second entry
-  as a new find;
-- a private best-effort notification to the first saved administrator when a
-  new visitor find is accepted;
-- direct-radio-only access with no routed or repeater connections; and
-- an optional calibrated RSSI limit for controlling the usable distance.
+## How the cache works
 
-The current release is **v1.17.1-C5** for MeshPocket and Heltec V3. Cache
-interaction remains MeshPocket-only; the Heltec V3 package retains the Cache
-Room Server baseline behaviour.
+- Access must arrive directly by radio; routed and repeater connections are
+  rejected.
+- The newest three log entries are shown when requested, with commands for
+  paging through older entries.
+- Up to 100 entries are retained in flash across reboots and power loss.
+- Visitors may leave one entry every 24 hours and may edit their recent entry
+  without increasing the find count.
+- An optional calibrated RSSI boundary can require visitors to be physically
+  closer to the cache.
+- The first saved administrator receives a best-effort private message when a
+  new find is accepted.
+
+## Visitor commands
+
+Send these as ordinary messages in the direct conversation with the cache:
+
+- `!help` — show visitor instructions and available commands.
+- `!found` — show the current number of stored finds.
+- `!older` — show the next three older log entries.
+- `!newer` — move three entries toward the newest page.
+- `!latest` — return to the newest three entries.
+- `!edit <new log entry>` — replace your recent entry without adding another
+  find.
+
+Any other ordinary message is treated as a new log entry. Entries may contain
+at most 151 characters.
+
+## Administrator commands
+
+Send these through the authenticated Room Server CLI:
+
+- `cache clear` — clear log entries, the find count, posting cooldowns, and
+  visitor synchronization positions. It preserves identity, radio settings,
+  passwords, learned visitor names, and RSSI calibration.
+- `cache limit` — show the current posting interval.
+- `cache limit <hours>` — set the posting interval from 1 to 168 hours.
+- `cache limit off` — disable the posting interval.
+- `rssi` — report the current median RSSI from the requesting radio without
+  changing calibration.
+- `rssi status` — show the saved near, far, and access-limit values.
+- `rssi near` — save a reading taken beside the cache.
+- `rssi far` — save a reading at the farthest location where access should be
+  allowed and activate the RSSI boundary.
+- `rssi reset` — clear RSSI calibration and disable RSSI filtering. This works
+  over USB or from a directly connected authenticated administrator.
 
 Change both public development passwords during provisioning. Normal
 application-image updates preserve stored device configuration. A merged image
@@ -67,11 +93,6 @@ from a directly connected administrator.
 
 The RSSI gate remains inactive until both calibration points are recorded.
 Direct-radio-only access is always enforced and is independent of RSSI.
-
-## Not included yet
-
-Cache Firmware does not yet add puzzles, hints, structured finder records, or
-channel announcements.
 
 ## Build
 
