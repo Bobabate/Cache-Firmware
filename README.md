@@ -19,10 +19,6 @@ Cache Firmware is a standalone MeshCore Room Server firmware project for
 location-based radio caches. It began with ordinary upstream Room Server
 behaviour and is adding the cache interaction carefully, one board at a time.
 
-**Cache Firmware** is the name of the reusable firmware. **Recursive Cache**
-is the working name of the first geocache installation; it is not the firmware
-or repository name.
-
 The current cache interaction is available on the Heltec MeshPocket only. The
 Heltec WiFi LoRa 32 V3 remains at the original C1 Room Server behaviour.
 
