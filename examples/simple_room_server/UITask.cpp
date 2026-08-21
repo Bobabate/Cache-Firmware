@@ -1,4 +1,5 @@
 #include "UITask.h"
+#include "MyMesh.h"
 #include <Arduino.h>
 #include <helpers/CommonCLI.h>
 
@@ -26,11 +27,12 @@ static const uint8_t meshcore_logo [] PROGMEM = {
     0xe3, 0xe3, 0x8f, 0xff, 0x1f, 0xfc, 0x3c, 0x0e, 0x1f, 0xf8, 0xff, 0xf8, 0x70, 0x3c, 0x7f, 0xf8, 
 };
 
-void UITask::begin(NodePrefs* node_prefs, mesh::MainBoard* board, const char* build_date, const char* firmware_version) {
+void UITask::begin(NodePrefs* node_prefs, mesh::MainBoard* board, MyMesh* mesh, const char* build_date, const char* firmware_version) {
   _prevBtnState = HIGH;
   _auto_off = millis() + AUTO_OFF_MILLIS;
   _node_prefs = node_prefs;
   _board = board;
+  _mesh = mesh;
   _display->turnOn();
 
 #ifdef CACHE_FIRMWARE
@@ -71,6 +73,10 @@ void UITask::renderCurrScreen() {
   snprintf(tmp, sizeof(tmp), "Battery: %d%%  %u.%02uV", batteryPercentage,
            batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
   _display->setCursor(0, 40);
+  _display->print(tmp);
+
+  snprintf(tmp, sizeof(tmp), "Cache found %u times", _mesh ? _mesh->getCachePostCount() : 0);
+  _display->setCursor(0, 55);
   _display->print(tmp);
 #else
   if (millis() < BOOT_SCREEN_MILLIS) { // boot screen

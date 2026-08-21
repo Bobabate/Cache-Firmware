@@ -4,18 +4,21 @@
 #include <helpers/CommonCLI.h>
 #include <MeshCore.h>
 
+class MyMesh;
+
 class UITask {
   DisplayDriver* _display;
   unsigned long _next_read, _next_refresh, _auto_off;
   int _prevBtnState;
   NodePrefs* _node_prefs;
   mesh::MainBoard* _board;
+  MyMesh* _mesh;
   char _version_info[32];
 
   void renderCurrScreen();
 public:
   UITask(DisplayDriver& display) : _display(&display) { _next_read = _next_refresh = 0; }
-  void begin(NodePrefs* node_prefs, mesh::MainBoard* board, const char* build_date, const char* firmware_version);
+  void begin(NodePrefs* node_prefs, mesh::MainBoard* board, MyMesh* mesh, const char* build_date, const char* firmware_version);
 
   void loop();
 };

@@ -42,6 +42,8 @@ struct ServerStats {
 static const char* CACHE_POST_FILE_A = "/cache_posts_a";
 static const char* CACHE_POST_FILE_B = "/cache_posts_b";
 static const char* CACHE_SETTINGS_FILE = "/cache_settings";
+static const char* CACHE_VISITORS_FILE = "/cache_visitors";
+static const char* CACHE_LIMIT_FILE = "/cache_limit";
 static const uint32_t CACHE_POST_MAGIC = 0x43505354;  // CPST
 static const uint32_t CACHE_SETTINGS_MAGIC = 0x43525353;  // CRSS
 
@@ -69,6 +71,15 @@ struct __attribute__((packed)) CacheSettingsRecord {
   uint8_t calibrated;
   uint32_t checksum;
 };
+
+struct __attribute__((packed)) CacheVisitorFileHeader {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t count;
+  uint32_t checksum;
+};
+
+static const uint32_t CACHE_VISITOR_MAGIC = 0x43564953; // CVIS
 
 uint32_t MyMesh::cacheChecksum(const uint8_t* data, size_t len) const {
   uint32_t hash = 2166136261UL;
@@ -235,10 +246,93 @@ bool MyMesh::saveCacheSettings() {
   file.close();
   return valid;
 }
+
+bool MyMesh::loadCacheVisitors() {
+  cache_visitor_count = 0;
+  memset(cache_visitors, 0, sizeof(cache_visitors));
+  if (!_fs->exists(CACHE_VISITORS_FILE)) return true;
+  File file = _fs->open(CACHE_VISITORS_FILE);
+  if (!file) return false;
+  CacheVisitorFileHeader header;
+  bool ok = file.read((uint8_t*)&header, sizeof(header)) == sizeof(header);
+  ok = ok && header.magic == CACHE_VISITOR_MAGIC && header.version == 1 && header.count <= MAX_CLIENTS;
+  ok = ok && header.checksum == cacheChecksum((const uint8_t*)&header, sizeof(header) - sizeof(header.checksum));
+  if (ok) ok = file.read((uint8_t*)cache_visitors, header.count * sizeof(CacheVisitor)) == header.count * sizeof(CacheVisitor);
+  file.close();
+  if (ok) cache_visitor_count = header.count;
+  return ok;
+}
+
+bool MyMesh::saveCacheVisitors() {
+  File file = openCacheWrite(CACHE_VISITORS_FILE);
+  if (!file) return false;
+  CacheVisitorFileHeader header = {CACHE_VISITOR_MAGIC, 1, cache_visitor_count, 0};
+  header.checksum = cacheChecksum((const uint8_t*)&header, sizeof(header) - sizeof(header.checksum));
+  bool ok = file.write((const uint8_t*)&header, sizeof(header)) == sizeof(header);
+  if (ok) ok = file.write((const uint8_t*)cache_visitors, cache_visitor_count * sizeof(CacheVisitor)) == cache_visitor_count * sizeof(CacheVisitor);
+  file.close();
+  return ok;
+}
+
+void MyMesh::loadCachePostInterval() {
+  cache_post_interval = 86400;
+  if (!_fs->exists(CACHE_LIMIT_FILE)) return;
+  File file = _fs->open(CACHE_LIMIT_FILE);
+  if (!file) return;
+  uint32_t stored[2];
+  bool ok = file.read((uint8_t*)stored, sizeof(stored)) == sizeof(stored);
+  file.close();
+  if (ok && stored[1] == cacheChecksum((const uint8_t*)&stored[0], sizeof(stored[0]))) cache_post_interval = stored[0];
+}
+
+bool MyMesh::saveCachePostInterval() {
+  File file = openCacheWrite(CACHE_LIMIT_FILE);
+  if (!file) return false;
+  uint32_t stored[2] = {cache_post_interval, cacheChecksum((const uint8_t*)&cache_post_interval, sizeof(cache_post_interval))};
+  bool ok = file.write((const uint8_t*)stored, sizeof(stored)) == sizeof(stored);
+  file.close();
+  return ok;
+}
+
+MyMesh::CacheVisitor* MyMesh::findCacheVisitor(const uint8_t* pub_key, bool create) {
+  for (uint8_t i = 0; i < cache_visitor_count; i++) if (memcmp(cache_visitors[i].pub_key, pub_key, PUB_KEY_SIZE) == 0) return &cache_visitors[i];
+  if (!create || cache_visitor_count >= MAX_CLIENTS) return NULL;
+  CacheVisitor* visitor = &cache_visitors[cache_visitor_count++];
+  memset(visitor, 0, sizeof(*visitor));
+  memcpy(visitor->pub_key, pub_key, PUB_KEY_SIZE);
+  return visitor;
+}
+
+const char* MyMesh::cacheVisitorName(const mesh::Identity& id, char* fallback) {
+  CacheVisitor* visitor = findCacheVisitor(id.pub_key, false);
+  if (visitor && visitor->name[0]) return visitor->name;
+  snprintf(fallback, 10, "%02x%02x", id.pub_key[0], id.pub_key[1]);
+  return fallback;
+}
+
+bool MyMesh::clearCachePosts() {
+  memset(posts, 0, sizeof(posts));
+  next_post_idx = 0;
+  _num_posted = 0;
+  for (uint8_t i = 0; i < cache_visitor_count; i++) {
+    cache_visitors[i].last_post = 0;
+    cache_visitors[i].sync_since = 0;
+  }
+  saveCacheVisitors();
+  return saveCachePosts();
+}
 #endif
 
 void MyMesh::addPost(ClientInfo *client, const char *postData) {
+#ifdef CACHE_INTERACTIVE_FEATURES
+  char fallback[10], rendered[MAX_POST_TEXT_LEN + 1];
+  snprintf(rendered, sizeof(rendered), "%s: %s", cacheVisitorName(client->id, fallback), postData);
+  storePost(client->id, rendered);
+  CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
+  if (visitor) { visitor->last_post = getRTCClock()->getCurrentTime(); saveCacheVisitors(); }
+#else
   storePost(client->id, postData);
+#endif
 }
 
 void MyMesh::addSystemPost(const char *postData) {
@@ -283,7 +377,11 @@ void MyMesh::pushPostToClient(ClientInfo *client, PostInfo &post) {
   reply_data[len++] = (TXT_TYPE_SIGNED_PLAIN << 2) | (attempt & 3); // 'signed' plain text
 
   // encode prefix of post.author.pub_key
+  #ifdef CACHE_INTERACTIVE_FEATURES
+  memcpy(&reply_data[len], self_id.pub_key, 4);
+  #else
   memcpy(&reply_data[len], post.author.pub_key, 4);
+  #endif
   len += 4; // just first 4 bytes
 
   int text_len = strlen(post.text);
@@ -338,6 +436,11 @@ bool MyMesh::processAck(const uint8_t *data) {
 #ifdef CACHE_INTERACTIVE_FEATURES
       if (client->extra.room.cache_pending_advances_sync) {
         client->extra.room.sync_since = client->extra.room.push_post_timestamp;
+        CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
+        if (visitor && client->extra.room.sync_since > visitor->sync_since) {
+          visitor->sync_since = client->extra.room.sync_since;
+          saveCacheVisitors();
+        }
       }
       client->extra.room.cache_pending_advances_sync = 0;
 #else
@@ -404,12 +507,29 @@ void MyMesh::configureCachePage(ClientInfo* client, uint16_t offset) {
   next_push = futureMillis(PUSH_NOTIFY_DELAY_MILLIS);
 }
 
+void MyMesh::configureCacheUnreadPage(ClientInfo* client, uint32_t sync_since) {
+  client->extra.room.sync_since = sync_since;
+  client->extra.room.cache_sync_until = sync_since;
+  client->extra.room.cache_page_offset = 0;
+  client->extra.room.pending_ack = 0;
+  client->extra.room.push_failures = 0;
+  uint8_t unread = 0;
+  for (uint16_t i = 0, count = cachePostCount(); i < count && unread < 3; i++) {
+    PostInfo* post = cachePostAt(i);
+    if (post && post->post_timestamp > sync_since) {
+      client->extra.room.cache_sync_until = post->post_timestamp;
+      unread++;
+    }
+  }
+  next_push = futureMillis(PUSH_NOTIFY_DELAY_MILLIS);
+}
+
 void MyMesh::pushCacheInstructions(ClientInfo* client) {
   PostInfo instructions;
   instructions.author = self_id;
   instructions.post_timestamp = getRTCClock()->getCurrentTimeUnique();
   snprintf(instructions.text, sizeof(instructions.text),
-           "Welcome to %s. Showing 3 posts. Send !older, !newer, or !latest. Send any other message to add a post.",
+           "Welcome to %s. You may leave one log entry every 24 hours, up to 151 characters. Send !help for commands.",
            _prefs.node_name);
   pushPostToClient(client, instructions);
   client->extra.room.cache_pending_advances_sync = 0;
@@ -432,7 +552,11 @@ int8_t MyMesh::medianClientRssi(const ClientInfo* client) const {
   return values[count / 2];
 }
 
-bool MyMesh::handleCachePageCommand(ClientInfo* client, const char* text) {
+bool MyMesh::handleCachePageCommand(ClientInfo* client, const char* text, char* reply) {
+  if (strcmp(text, "!help") == 0) {
+    strcpy(reply, "Any message adds your log entry. Browse 3 at a time: !older, !newer, !latest. Limit: one entry per 24h.");
+    return true;
+  }
   if (strcmp(text, "!older") == 0) {
     configureCachePage(client, client->extra.room.cache_page_offset + 3);
     return true;
@@ -450,6 +574,30 @@ bool MyMesh::handleCachePageCommand(ClientInfo* client, const char* text) {
 }
 
 bool MyMesh::handleCacheCLI(uint32_t sender_timestamp, ClientInfo* sender, const char* command, char* reply) {
+  if (strcmp(command, "cache clear") == 0) {
+    if (sender && !sender->isAdmin()) strcpy(reply, "ERR admin only");
+    else strcpy(reply, clearCachePosts() ? "OK log memory cleared" : "ERR clear failed");
+    return true;
+  }
+  if (strcmp(command, "cache limit") == 0) {
+    if (cache_post_interval == 0) strcpy(reply, "Posting limit off");
+    else snprintf(reply, MAX_POST_TEXT_LEN, "Posting limit: %lu hours", (unsigned long)(cache_post_interval / 3600));
+    return true;
+  }
+  if (strcmp(command, "cache limit off") == 0) {
+    cache_post_interval = 0;
+    strcpy(reply, saveCachePostInterval() ? "OK posting limit off" : "ERR save failed");
+    return true;
+  }
+  if (strncmp(command, "cache limit ", 12) == 0) {
+    int hours = atoi(command + 12);
+    if (hours < 1 || hours > 168) strcpy(reply, "ERR hours must be 1..168 or off");
+    else {
+      cache_post_interval = (uint32_t)hours * 3600UL;
+      strcpy(reply, saveCachePostInterval() ? "OK" : "ERR save failed");
+    }
+    return true;
+  }
   if (strcmp(command, "rssi") == 0) {
     if (cache_rssi_calibrated) {
       snprintf(reply, MAX_POST_TEXT_LEN, "Near %d | Far %d | Limit %d dBm",
@@ -671,6 +819,21 @@ mesh::DispatcherAction MyMesh::onRecvPacket(mesh::Packet* pkt) {
   return Mesh::onRecvPacket(pkt);
 }
 
+void MyMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp,
+                          const uint8_t* app_data, size_t app_data_len) {
+#ifdef CACHE_INTERACTIVE_FEATURES
+  AdvertDataParser parser(app_data, app_data_len);
+  if (!parser.isValid() || parser.getType() != ADV_TYPE_CHAT) return;
+  if (packet->getPathHashCount() != 0) return;
+  CacheVisitor* visitor = findCacheVisitor(id.pub_key, true);
+  if (visitor && parser.hasName()) {
+    StrHelper::strncpy(visitor->name, parser.getName(), sizeof(visitor->name));
+    saveCacheVisitors();
+  }
+  cache_advert_reply_at = futureMillis(5000);
+#endif
+}
+
 void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const mesh::Identity &sender,
                             uint8_t *data, size_t len) {
 #ifdef CACHE_INTERACTIVE_FEATURES
@@ -684,7 +847,9 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
 
     data[len] = 0;                                        // ensure null terminator
 
+    CacheVisitor* visitor_record = findCacheVisitor(sender.pub_key, true);
     ClientInfo* client = NULL;
+    bool returning_client = visitor_record && visitor_record->sync_since != 0;
     if (data[8] == 0) {   // blank password, just check if sender is in ACL
       client = acl.getClient(sender.pub_key, PUB_KEY_SIZE);
       if (client == NULL) {
@@ -737,8 +902,12 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
     client->extra.room.cache_recent_rssi[0] = (int8_t)radio_driver.getLastRSSI();
     client->extra.room.cache_recent_rssi_count = 1;
     client->extra.room.cache_recent_rssi_next = 1;
-    configureCachePage(client, 0);
-    client->extra.room.cache_intro_pending = 1;
+    uint32_t delivered_since = visitor_record ? visitor_record->sync_since : 0;
+    if (sender_sync_since > delivered_since) delivered_since = sender_sync_since;
+    if (returning_client || sender_sync_since != 0) configureCacheUnreadPage(client, delivered_since);
+    else configureCachePage(client, 0);
+    client->extra.room.cache_intro_pending = (returning_client || sender_sync_since != 0) ? 0 : 1;
+    saveCacheVisitors();
 #endif
 
     uint32_t now = getRTCClock()->getCurrentTimeUnique();
@@ -831,6 +1000,7 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
                           PUB_KEY_SIZE);
 
       uint8_t temp[166];
+      temp[5] = 0;
       bool send_ack;
       if (flags == TXT_TYPE_CLI_DATA) {
         if (client->isAdmin()) {
@@ -858,14 +1028,21 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
         } else {
           if (!is_retry) {
 #ifdef CACHE_INTERACTIVE_FEATURES
-            if (!handleCachePageCommand(client, (const char *)&data[5])) {
-              addPost(client, (const char *)&data[5]);
+            if (!handleCachePageCommand(client, (const char *)&data[5], (char *)&temp[5])) {
+              CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
+              uint32_t elapsed = visitor && visitor->last_post && now > visitor->last_post ? now - visitor->last_post : cache_post_interval;
+              if (!client->isAdmin() && cache_post_interval && visitor && visitor->last_post && elapsed < cache_post_interval) {
+                uint32_t remaining = cache_post_interval - elapsed;
+                snprintf((char *)&temp[5], sizeof(temp) - 5, "Next log entry available in %lu h %lu min.",
+                         (unsigned long)(remaining / 3600), (unsigned long)((remaining % 3600) / 60));
+              } else {
+                addPost(client, (const char *)&data[5]);
+              }
             }
 #else
             addPost(client, (const char *)&data[5]);
 #endif
           }
-          temp[5] = 0; // no reply (ACK is enough)
           send_ack = true;
         }
       }
@@ -1080,6 +1257,10 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   cache_rssi_near = cache_rssi_far = cache_rssi_limit = 0;
   cache_rssi_calibrated = false;
   cache_cli_sender = NULL;
+  cache_visitor_count = 0;
+  memset(cache_visitors, 0, sizeof(cache_visitors));
+  cache_advert_reply_at = 0;
+  cache_post_interval = 86400;
 #endif
 
   memset(default_scope.key, 0, sizeof(default_scope.key));
@@ -1094,6 +1275,8 @@ void MyMesh::begin(FILESYSTEM *fs) {
 #ifdef CACHE_INTERACTIVE_FEATURES
   loadCachePosts();
   loadCacheSettings();
+  loadCacheVisitors();
+  loadCachePostInterval();
 #endif
 
   acl.load(_fs, self_id);
@@ -1395,6 +1578,14 @@ bool MyMesh::saveFilter(ClientInfo* client) {
 
 void MyMesh::loop() {
   mesh::Mesh::loop();
+
+#ifdef CACHE_INTERACTIVE_FEATURES
+  if (cache_advert_reply_at && millisHasNowPassed(cache_advert_reply_at)) {
+    cache_advert_reply_at = 0;
+    mesh::Packet* advert = createSelfAdvert();
+    if (advert) sendZeroHop(advert);
+  }
+#endif
 
   if (millisHasNowPassed(next_push) && acl.getNumClients() > 0) {
     // check for ACK timeouts

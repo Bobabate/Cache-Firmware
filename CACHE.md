@@ -83,3 +83,35 @@ Cache-specific screen does not change the upstream Room Server display.
 
 A structured finder log, cache descriptions, hints, puzzles, and optional
 channel announcements remain possible future features.
+
+## C3 MeshPocket implementation
+
+- Add an authenticated CLI command, `cache clear`, that clears all
+  persistent posts, post counters, and visitor synchronization positions for
+  testing. It must preserve the device identity, node name, radio settings,
+  passwords, and RSSI calibration.
+- Add a persistent author-name registry keyed by the visitor's MeshCore public
+  key. Learn names automatically from valid direct companion adverts and use a
+  short public-key fallback until a name is known. Log entries include the
+  learned name instead of appearing only as `Unknown <key>` in the client.
+  Registered names survive reboot and `cache clear`.
+- Send the temporary welcome/instruction message only on a visitor's first
+  login so repeated connections do not clutter the visitor's local MeshCore
+  conversation. Add `!help` to request the instructions again on demand. The
+  welcome remains temporary and must never consume a persistent post slot. It
+  must clearly tell visitors that they may leave one log entry every 24 hours
+  and that a log entry can contain at most 151 characters. Visitor-facing
+  messages should say `log entry`, not `post`.
+- Add a configurable posting limit, enabled by default at one log entry per
+  visitor public key every 24 hours. Administrators are exempt, and help and
+  paging commands do not count. Persist each visitor's last-entry time across
+  reboot. A rejected entry should report the remaining wait time.
+  Provide authenticated CLI commands to view, change, or disable the interval.
+- On Cache Firmware boards with a display, show `Cache found N times` using
+  the current number of persistent visitor posts. Do not count temporary
+  welcome, instruction, or system messages. Reset the displayed count to zero
+  when `cache clear` clears the post store.
+- For testing, when Cache Firmware receives a valid zero-hop companion advert,
+  send its own zero-hop advert in reply after a five-second delay. Do not add a
+  per-node cooldown yet. Ignore self-adverts and restrict replies to companion
+  adverts so Cache/Room/Repeater devices cannot create an advert-response loop.

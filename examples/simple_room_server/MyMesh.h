@@ -125,6 +125,16 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   int  matching_peer_indexes[MAX_CLIENTS];
 
 #ifdef CACHE_INTERACTIVE_FEATURES
+  struct CacheVisitor {
+    uint8_t pub_key[PUB_KEY_SIZE];
+    char name[32];
+    uint32_t last_post;
+    uint32_t sync_since;
+  };
+  CacheVisitor cache_visitors[MAX_CLIENTS];
+  uint8_t cache_visitor_count;
+  unsigned long cache_advert_reply_at;
+  uint32_t cache_post_interval;
   uint32_t cache_store_sequence;
   bool cache_store_is_b;
   int8_t cache_rssi_near, cache_rssi_far, cache_rssi_limit;
@@ -139,14 +149,22 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool saveCachePosts();
   void loadCacheSettings();
   bool saveCacheSettings();
+  bool loadCacheVisitors();
+  bool saveCacheVisitors();
+  void loadCachePostInterval();
+  bool saveCachePostInterval();
+  CacheVisitor* findCacheVisitor(const uint8_t* pub_key, bool create = false);
+  const char* cacheVisitorName(const mesh::Identity& id, char* fallback);
+  bool clearCachePosts();
   bool isCacheDirectPacket(const mesh::Packet* packet, const ClientInfo* client = NULL) const;
   bool passesCacheRssi() const;
   uint16_t cachePostCount() const;
   PostInfo* cachePostAt(uint16_t chronological_idx);
   void configureCachePage(ClientInfo* client, uint16_t offset);
+  void configureCacheUnreadPage(ClientInfo* client, uint32_t sync_since);
   void pushCacheInstructions(ClientInfo* client);
   int8_t medianClientRssi(const ClientInfo* client) const;
-  bool handleCachePageCommand(ClientInfo* client, const char* text);
+  bool handleCachePageCommand(ClientInfo* client, const char* text, char* reply);
   bool handleCacheCLI(uint32_t sender_timestamp, ClientInfo* sender, const char* command, char* reply);
 #endif
 
@@ -188,6 +206,8 @@ protected:
   }
 
   mesh::DispatcherAction onRecvPacket(mesh::Packet* pkt) override;
+  void onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp,
+                    const uint8_t* app_data, size_t app_data_len) override;
 
   bool allowPacketForward(const mesh::Packet* packet) override;
   void onAnonDataRecv(mesh::Packet* packet, const uint8_t* secret, const mesh::Identity& sender, uint8_t* data, size_t len) override;
@@ -215,6 +235,9 @@ public:
   const char* getBuildDate() override { return FIRMWARE_BUILD_DATE; }
   const char* getRole() override { return FIRMWARE_ROLE; }
   const char* getNodeName() { return _prefs.node_name; }
+#ifdef CACHE_INTERACTIVE_FEATURES
+  uint16_t getCachePostCount() const { return cachePostCount(); }
+#endif
   NodePrefs* getNodePrefs() {
     return &_prefs;
   }

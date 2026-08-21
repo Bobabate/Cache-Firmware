@@ -30,7 +30,7 @@ Heltec WiFi LoRa 32 V3 remains at the original C1 Room Server behaviour.
 
 - Upstream MeshCore Room Server behaviour.
 - Dedicated MeshPocket and Heltec V3 build targets.
-- MeshPocket firmware identity `Cache v1.17.1-C2`.
+- MeshPocket firmware identity `Cache v1.17.1-C3`.
 - Ordinary upstream Room Server node names on clean installation; set the
   cache's real name during configuration.
 - Upstream MeshCore radio defaults.
@@ -48,7 +48,7 @@ The current MeshPocket release adds:
 - direct-radio-only access with no routed or repeater connections; and
 - an optional calibrated RSSI limit for controlling the usable distance.
 
-The current MeshPocket release is **v1.17.1-C2**. Heltec V3 remains at
+The current MeshPocket release is **v1.17.1-C3**. Heltec V3 remains at
 **v1.17.1-C1**.
 
 Change both public development passwords during provisioning. Normal
@@ -76,11 +76,11 @@ channel announcements.
 Install PlatformIO and run:
 
 ```sh
-FIRMWARE_VERSION=v1.17.1-C2 ./build.sh build-firmware \
+FIRMWARE_VERSION=v1.17.1-C3 ./build.sh build-firmware \
   Cache_mesh_pocket_room_server
 ```
 
-GitHub Actions can still test either board or both. The C2 version tag builds
+GitHub Actions can still test either board or both. The C3 version tag builds
 and publishes the MeshPocket package only.
 
 ## Configure

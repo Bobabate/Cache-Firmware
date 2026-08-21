@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.17.1-C3 - 2026-08-21
+
+- Send welcome instructions only on first login and add `!help`.
+- Return only unread entries on later logins, three at a time; keep `!latest`
+  as the explicit replay command.
+- Learn visitor names from direct companion adverts and prefix persistent log
+  entries with the learned name or a short public-key fallback.
+- Add a persistent one-entry-per-24-hours visitor limit with administrator
+  exemption and authenticated `cache limit` controls.
+- Add authenticated `cache clear` to clear posts, counters, cooldowns, and sync
+  positions without erasing identity, configuration, names, or RSSI settings.
+- Show `Cache found N times` on the MeshPocket display.
+- Reply to valid zero-hop companion adverts with a zero-hop Cache advert after
+  five seconds during testing.
+
 ## 1.17.1-C2 - 2026-08-20
 
 - Remove the installation-specific `Recursive Cache` node name from firmware
