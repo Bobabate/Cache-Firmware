@@ -39,6 +39,8 @@ MeshCore client protocol.
 - Standard initial room password `hello`.
 - MeshPocket UF2/ZIP and Heltec V3 application/full-install BIN packages.
 
+The current release is **v1.17.1-C1**.
+
 Change both public development passwords during provisioning. Normal
 application-image updates preserve stored device configuration. A merged image
 is intended for a clean/full installation and uses the compiled defaults.
