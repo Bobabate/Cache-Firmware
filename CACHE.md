@@ -8,6 +8,20 @@
 - Future installations can use different cache names without requiring a new
   firmware project.
 
+## Recursive Cache installation
+
+Recursive Cache will be located near Toronto's “Recursive History” plaque and
+the nearby bench. The plaque provides the theme and the bench provides a
+natural place for a visitor to connect to the radio.
+
+The initial experience remains ordinary Room Server interaction: visitors can
+read the shared room and leave a post. Each post becomes another entry in the
+location's continuing history, extending the plaque's recursive idea without
+requiring a puzzle or separate game system.
+
+The exact radio placement, power, enclosure, antenna, and permission to install
+equipment remain open design decisions.
+
 ## Version 1 scope
 
 Version 1 is a branded, buildable MeshCore Room Server baseline. It intentionally
