@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.17.1-C4 - 2026-08-21
+
+- Fix generated visitor replies so `!help` and posting-limit warnings display
+  as ordinary messages in companion clients.
+- Warn repeat visitors that a recent log entry already exists and add
+  `!edit <text>` to replace it without increasing the find count.
+- Add `!found` to report the persistent find count shown on the MeshPocket.
+- Send a private, best-effort notification to the first saved administrator
+  when a new visitor find is accepted.
+- Add focused tests for successful, missing, overlength, absent-entry, and
+  non-command `!edit` parsing.
+
 ## 1.17.1-C3 - 2026-08-21
 
 - Send welcome instructions only on first login and add `!help`.

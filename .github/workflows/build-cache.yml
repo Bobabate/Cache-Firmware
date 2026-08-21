@@ -135,4 +135,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Cache Firmware ${GITHUB_REF_NAME}" \
-            --notes "MeshPocket-only Cache Firmware release based on MeshCore Room Server. Heltec V3 remains at v1.17.1-C1."
+            --notes "MeshPocket-only Cache Firmware release based on MeshCore Room Server. Adds visible visitor replies, !edit, !found, and first-admin find notifications. Application updates preserve existing settings. Heltec V3 remains at v1.17.1-C1."

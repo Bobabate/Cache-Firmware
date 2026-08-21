@@ -3,24 +3,8 @@
 ## Naming
 
 - **Cache Firmware** is the reusable firmware project.
-- **Recursive Cache** is the working name of the first geocache installation
-  used in design conversations and, later, device configuration.
-- Future installations can use different cache names without requiring a new
+- Installations can use different cache names without requiring a new
   firmware project.
-
-## Recursive Cache installation
-
-Recursive Cache will be located near Toronto's “Recursive History” plaque and
-the nearby bench. The plaque provides the theme and the bench provides a
-natural place for a visitor to connect to the radio.
-
-The initial experience remains ordinary Room Server interaction: visitors can
-read the shared room and leave a post. Each post becomes another entry in the
-location's continuing history, extending the plaque's recursive idea without
-requiring a puzzle or separate game system.
-
-The exact radio placement, power, enclosure, antenna, and permission to install
-equipment remain open design decisions.
 
 ## C1 baseline
 
@@ -83,6 +67,31 @@ Cache-specific screen does not change the upstream Room Server display.
 
 A structured finder log, cache descriptions, hints, puzzles, and optional
 channel announcements remain possible future features.
+
+## Todo
+
+- [x] Fix generated `!help` and posting-limit replies by initializing their
+  outgoing message type as `TXT_TYPE_PLAIN`, and add coverage confirming the
+  companion displays both responses.
+- [x] When a visitor who has already logged the cache during the current
+  posting interval sends another ordinary message, do not add it as a new log
+  entry. Reply with a warning that today's entry already exists and explain
+  that `!edit <new log entry>` replaces it. Replacement text must obey the
+  151-character limit, update the existing entry rather than create another,
+  and leave the `Cache found N times` count unchanged. Add `!edit` to the
+  `!help` response and test successful, missing-text, overlength, and no-entry
+  cases.
+- [x] Add `!found` to report how many times the cache has been found since its
+  first stored find. Use the same persistent visitor-log count shown by
+  `Cache found N times`, do not count temporary or system messages, and reset
+  it with `cache clear`. Reply with `This cache has been found N times since
+  its first find.` and include `!found` in the `!help` response.
+- [x] When a new visitor log entry is accepted, send a private, best-effort
+  notification to the first saved administrator: `Cache found by <name>. Total
+  finds: N.` Do not notify for `!edit`, rejected duplicate entries, paging or
+  help commands, or system messages. Notify only the first administrator to
+  avoid duplicate mesh traffic; delivery does not need to be queued while the
+  administrator is unreachable.
 
 ## C3 MeshPocket implementation
 

@@ -160,6 +160,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   bool passesCacheRssi() const;
   uint16_t cachePostCount() const;
   PostInfo* cachePostAt(uint16_t chronological_idx);
+  PostInfo* findCachePostByAuthor(const mesh::Identity& author);
+  bool replaceCachePost(ClientInfo* client, const char* replacement);
+  void notifyFirstCacheAdmin(ClientInfo* finder, const char* finder_name);
+  void sendCachePrivateText(ClientInfo* client, const char* text);
   void configureCachePage(ClientInfo* client, uint16_t offset);
   void configureCacheUnreadPage(ClientInfo* client, uint32_t sync_since);
   void pushCacheInstructions(ClientInfo* client);

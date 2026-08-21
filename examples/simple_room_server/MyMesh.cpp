@@ -1,5 +1,9 @@
 #include "MyMesh.h"
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+#include <helpers/CacheCommandHelpers.h>
+#endif
+
 #define REPLY_DELAY_MILLIS          1500
 #define PUSH_NOTIFY_DELAY_MILLIS    2000
 #define SYNC_PUSH_INTERVAL          1200
@@ -181,6 +185,60 @@ PostInfo* MyMesh::cachePostAt(uint16_t chronological_idx) {
   return &posts[(start + chronological_idx) % MAX_UNSYNCED_POSTS];
 }
 
+PostInfo* MyMesh::findCachePostByAuthor(const mesh::Identity& author) {
+  for (uint16_t i = cachePostCount(); i > 0; i--) {
+    PostInfo* post = cachePostAt(i - 1);
+    if (post && post->author.matches(author)) return post;
+  }
+  return NULL;
+}
+
+bool MyMesh::replaceCachePost(ClientInfo* client, const char* replacement) {
+  PostInfo* post = client ? findCachePostByAuthor(client->id) : NULL;
+  if (!post || !replacement) return false;
+
+  char previous[MAX_POST_TEXT_LEN + 1];
+  StrHelper::strncpy(previous, post->text, sizeof(previous));
+  char fallback[10];
+  snprintf(post->text, sizeof(post->text), "%s: %s",
+           cacheVisitorName(client->id, fallback), replacement);
+  if (saveCachePosts()) return true;
+  StrHelper::strncpy(post->text, previous, sizeof(post->text));
+  return false;
+}
+
+void MyMesh::sendCachePrivateText(ClientInfo* client, const char* text) {
+  if (!client || !text || !text[0]) return;
+  uint8_t data[MAX_PACKET_PAYLOAD];
+  uint32_t timestamp = getRTCClock()->getCurrentTimeUnique();
+  memcpy(data, &timestamp, 4);
+  data[4] = (TXT_TYPE_PLAIN << 2);
+  size_t text_len = strlen(text);
+  if (text_len > sizeof(data) - 5) text_len = sizeof(data) - 5;
+  memcpy(&data[5], text, text_len);
+  mesh::Packet* reply = createDatagram(PAYLOAD_TYPE_TXT_MSG, client->id,
+                                       client->shared_secret, data, 5 + text_len);
+  if (!reply) return;
+  sendFloodScoped(default_scope, reply, 0, _prefs.path_hash_mode + 1);
+}
+
+void MyMesh::notifyFirstCacheAdmin(ClientInfo* finder, const char* finder_name) {
+  if (!finder || finder->isAdmin()) return;
+  ClientInfo* admin = NULL;
+  for (int i = 0; i < acl.getNumClients(); i++) {
+    ClientInfo* candidate = acl.getClientByIdx(i);
+    if (candidate->isAdmin()) {
+      admin = candidate;
+      break;
+    }
+  }
+  if (!admin) return;
+  char message[MAX_POST_TEXT_LEN + 1];
+  snprintf(message, sizeof(message), "Cache found by %s. Total finds: %u.",
+           finder_name, (unsigned int)cachePostCount());
+  sendCachePrivateText(admin, message);
+}
+
 bool MyMesh::saveCachePosts() {
   const char* next_path = cache_store_is_b ? CACHE_POST_FILE_A : CACHE_POST_FILE_B;
   File file = openCacheWrite(next_path);
@@ -326,10 +384,12 @@ bool MyMesh::clearCachePosts() {
 void MyMesh::addPost(ClientInfo *client, const char *postData) {
 #ifdef CACHE_INTERACTIVE_FEATURES
   char fallback[10], rendered[MAX_POST_TEXT_LEN + 1];
-  snprintf(rendered, sizeof(rendered), "%s: %s", cacheVisitorName(client->id, fallback), postData);
+  const char* visitor_name = cacheVisitorName(client->id, fallback);
+  snprintf(rendered, sizeof(rendered), "%s: %s", visitor_name, postData);
   storePost(client->id, rendered);
   CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
   if (visitor) { visitor->last_post = getRTCClock()->getCurrentTime(); saveCacheVisitors(); }
+  notifyFirstCacheAdmin(client, visitor_name);
 #else
   storePost(client->id, postData);
 #endif
@@ -554,7 +614,38 @@ int8_t MyMesh::medianClientRssi(const ClientInfo* client) const {
 
 bool MyMesh::handleCachePageCommand(ClientInfo* client, const char* text, char* reply) {
   if (strcmp(text, "!help") == 0) {
-    strcpy(reply, "Any message adds your log entry. Browse 3 at a time: !older, !newer, !latest. Limit: one entry per 24h.");
+    strcpy(reply, "Leave one log entry every 24h. Browse: !older !newer !latest. Edit yours: !edit <text>. Count finds: !found.");
+    return true;
+  }
+  if (strcmp(text, "!found") == 0) {
+    uint16_t count = cachePostCount();
+    if (count == 0) strcpy(reply, "This cache has not been found yet.");
+    else if (count == 1) strcpy(reply, "This cache has been found 1 time since its first find.");
+    else snprintf(reply, MAX_POST_TEXT_LEN + 1,
+                  "This cache has been found %u times since its first find.",
+                  (unsigned int)count);
+    return true;
+  }
+
+  PostInfo* existing = findCachePostByAuthor(client->id);
+  const char* replacement = NULL;
+  cache::EditCommandResult edit = cache::parseEditCommand(text, existing != NULL, &replacement);
+  if (edit == cache::EDIT_MISSING_TEXT) {
+    strcpy(reply, "Add your new log entry after !edit. Example: !edit Great cache!");
+    return true;
+  }
+  if (edit == cache::EDIT_TOO_LONG) {
+    strcpy(reply, "That replacement is too long. Log entries may contain at most 151 characters.");
+    return true;
+  }
+  if (edit == cache::EDIT_NO_ENTRY) {
+    strcpy(reply, "You do not have a recent log entry to edit.");
+    return true;
+  }
+  if (edit == cache::EDIT_READY) {
+    strcpy(reply, replaceCachePost(client, replacement)
+                    ? "Your existing log entry was edited."
+                    : "Unable to edit your log entry.");
     return true;
   }
   if (strcmp(text, "!older") == 0) {
@@ -1028,13 +1119,12 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
         } else {
           if (!is_retry) {
 #ifdef CACHE_INTERACTIVE_FEATURES
+            temp[4] = (TXT_TYPE_PLAIN << 2);
             if (!handleCachePageCommand(client, (const char *)&data[5], (char *)&temp[5])) {
               CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
               uint32_t elapsed = visitor && visitor->last_post && now > visitor->last_post ? now - visitor->last_post : cache_post_interval;
               if (!client->isAdmin() && cache_post_interval && visitor && visitor->last_post && elapsed < cache_post_interval) {
-                uint32_t remaining = cache_post_interval - elapsed;
-                snprintf((char *)&temp[5], sizeof(temp) - 5, "Next log entry available in %lu h %lu min.",
-                         (unsigned long)(remaining / 3600), (unsigned long)((remaining % 3600) / 60));
+                strcpy((char *)&temp[5], "You already left a log entry in the last 24 hours. To edit it, send !edit <new log entry>.");
               } else {
                 addPost(client, (const char *)&data[5]);
               }
