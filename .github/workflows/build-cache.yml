@@ -31,7 +31,7 @@ jobs:
         id: matrix
         shell: bash
         env:
-          BOARD_CHOICE: ${{ github.event_name == 'push' && 'all' || inputs.boards }}
+          BOARD_CHOICE: ${{ github.event_name == 'push' && 'meshpocket' || inputs.boards }}
         run: |
           case "$BOARD_CHOICE" in
             all)
@@ -133,4 +133,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Cache Firmware ${GITHUB_REF_NAME}" \
-            --notes "Cache Firmware for Heltec MeshPocket and Heltec WiFi LoRa 32 V3, based on MeshCore Room Server."
+            --notes "MeshPocket-only Cache Firmware release based on MeshCore Room Server. Heltec V3 remains at v1.17.1-C1."

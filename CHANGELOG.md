@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.17.1-C2 - 2026-08-20
 
 - Remove the installation-specific `Recursive Cache` node name from firmware
   defaults. Clean installs now use each board's upstream Room Server name until

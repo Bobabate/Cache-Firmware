@@ -30,15 +30,16 @@ Heltec WiFi LoRa 32 V3 remains at the original C1 Room Server behaviour.
 
 - Upstream MeshCore Room Server behaviour.
 - Dedicated MeshPocket and Heltec V3 build targets.
-- Firmware identity `Cache v1.17.1-C1`.
+- MeshPocket firmware identity `Cache v1.17.1-C2`.
 - Ordinary upstream Room Server node names on clean installation; set the
   cache's real name during configuration.
 - Upstream MeshCore radio defaults.
 - Standard initial administrator password `password`.
 - Standard initial room password `hello`.
-- MeshPocket UF2/ZIP and Heltec V3 application/full-install BIN packages.
+- MeshPocket UF2/ZIP packages. The older Heltec V3 C1 build remains available
+  from its release.
 
-The next MeshPocket version, currently unreleased, adds:
+The current MeshPocket release adds:
 
 - up to 100 posts preserved across ordinary reboots and power loss;
 - no automatic delivery of newly added posts to other clients;
@@ -47,13 +48,14 @@ The next MeshPocket version, currently unreleased, adds:
 - direct-radio-only access with no routed or repeater connections; and
 - an optional calibrated RSSI limit for controlling the usable distance.
 
-The current release is **v1.17.1-C1**.
+The current MeshPocket release is **v1.17.1-C2**. Heltec V3 remains at
+**v1.17.1-C1**.
 
 Change both public development passwords during provisioning. Normal
 application-image updates preserve stored device configuration. A merged image
 is intended for a clean/full installation and uses the compiled defaults.
 
-## RSSI calibration (next MeshPocket version)
+## RSSI calibration
 
 After connecting directly as administrator, stand beside the cache and send
 `rssi near`. Move to the farthest location that should work and send `rssi far`.
@@ -74,12 +76,12 @@ channel announcements.
 Install PlatformIO and run:
 
 ```sh
-FIRMWARE_VERSION=v1.17.1-C1 ./build.sh build-firmware \
-  Cache_mesh_pocket_room_server Cache_heltec_v3_room_server
+FIRMWARE_VERSION=v1.17.1-C2 ./build.sh build-firmware \
+  Cache_mesh_pocket_room_server
 ```
 
-GitHub Actions can build either board or both. Version tags build both boards
-and publish their firmware packages as a permanent GitHub Release.
+GitHub Actions can still test either board or both. The C2 version tag builds
+and publishes the MeshPocket package only.
 
 ## Configure
 
