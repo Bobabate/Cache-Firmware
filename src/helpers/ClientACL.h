@@ -27,6 +27,15 @@ struct ClientInfo {
       uint32_t push_post_timestamp;
       unsigned long ack_timeout;
       uint8_t  push_failures;
+#ifdef CACHE_INTERACTIVE_FEATURES
+      uint32_t cache_sync_until;
+      uint16_t cache_page_offset;
+      uint8_t cache_intro_pending;
+      uint8_t cache_pending_advances_sync;
+      int8_t cache_recent_rssi[5];
+      uint8_t cache_recent_rssi_count;
+      uint8_t cache_recent_rssi_next;
+#endif
     } room;
   } extra;
   

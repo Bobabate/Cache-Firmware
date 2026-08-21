@@ -38,6 +38,205 @@ struct ServerStats {
   uint16_t n_posted, n_post_push;
 };
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+static const char* CACHE_POST_FILE_A = "/cache_posts_a";
+static const char* CACHE_POST_FILE_B = "/cache_posts_b";
+static const char* CACHE_SETTINGS_FILE = "/cache_settings";
+static const uint32_t CACHE_POST_MAGIC = 0x43505354;  // CPST
+static const uint32_t CACHE_SETTINGS_MAGIC = 0x43525353;  // CRSS
+
+struct __attribute__((packed)) CachePostFileHeader {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t count;
+  uint32_t sequence;
+  uint32_t checksum;
+};
+
+struct __attribute__((packed)) CachePostRecord {
+  uint32_t timestamp;
+  uint8_t author[PUB_KEY_SIZE];
+  char text[MAX_POST_TEXT_LEN + 1];
+  uint32_t checksum;
+};
+
+struct __attribute__((packed)) CacheSettingsRecord {
+  uint32_t magic;
+  uint16_t version;
+  int8_t near_rssi;
+  int8_t far_rssi;
+  int8_t limit_rssi;
+  uint8_t calibrated;
+  uint32_t checksum;
+};
+
+uint32_t MyMesh::cacheChecksum(const uint8_t* data, size_t len) const {
+  uint32_t hash = 2166136261UL;
+  for (size_t i = 0; i < len; i++) {
+    hash ^= data[i];
+    hash *= 16777619UL;
+  }
+  return hash;
+}
+
+File MyMesh::openCacheWrite(const char* path) {
+  _fs->remove(path);
+#if defined(NRF52_PLATFORM)
+  return _fs->open(path, FILE_O_WRITE);
+#elif defined(RP2040_PLATFORM)
+  return _fs->open(path, "w");
+#else
+  return _fs->open(path, "w", true);
+#endif
+}
+
+bool MyMesh::inspectCachePostFile(const char* path, uint32_t& sequence, uint16_t& count) {
+  if (!_fs->exists(path)) return false;
+  File file = _fs->open(path);
+  if (!file) return false;
+
+  CachePostFileHeader header;
+  bool valid = file.read((uint8_t*)&header, sizeof(header)) == sizeof(header);
+  valid = valid && header.magic == CACHE_POST_MAGIC && header.version == 1 && header.count <= MAX_UNSYNCED_POSTS;
+  valid = valid && header.checksum == cacheChecksum((const uint8_t*)&header, sizeof(header) - sizeof(header.checksum));
+
+  CachePostRecord record;
+  for (uint16_t i = 0; valid && i < header.count; i++) {
+    valid = file.read((uint8_t*)&record, sizeof(record)) == sizeof(record);
+    valid = valid && record.checksum == cacheChecksum((const uint8_t*)&record, sizeof(record) - sizeof(record.checksum));
+    valid = valid && record.timestamp != 0 && record.text[MAX_POST_TEXT_LEN] == 0;
+  }
+  file.close();
+  if (!valid) return false;
+  sequence = header.sequence;
+  count = header.count;
+  return true;
+}
+
+bool MyMesh::loadCachePostFile(const char* path) {
+  File file = _fs->open(path);
+  if (!file) return false;
+  CachePostFileHeader header;
+  if (file.read((uint8_t*)&header, sizeof(header)) != sizeof(header)) {
+    file.close();
+    return false;
+  }
+
+  memset(posts, 0, sizeof(posts));
+  CachePostRecord record;
+  for (uint16_t i = 0; i < header.count; i++) {
+    if (file.read((uint8_t*)&record, sizeof(record)) != sizeof(record)) {
+      file.close();
+      memset(posts, 0, sizeof(posts));
+      return false;
+    }
+    posts[i].post_timestamp = record.timestamp;
+    posts[i].author = mesh::Identity(record.author);
+    StrHelper::strncpy(posts[i].text, record.text, sizeof(posts[i].text));
+  }
+  file.close();
+  next_post_idx = header.count % MAX_UNSYNCED_POSTS;
+  cache_store_sequence = header.sequence;
+  return true;
+}
+
+void MyMesh::loadCachePosts() {
+  uint32_t seq_a = 0, seq_b = 0;
+  uint16_t count_a = 0, count_b = 0;
+  bool valid_a = inspectCachePostFile(CACHE_POST_FILE_A, seq_a, count_a);
+  bool valid_b = inspectCachePostFile(CACHE_POST_FILE_B, seq_b, count_b);
+
+  if (valid_b && (!valid_a || seq_b > seq_a)) {
+    cache_store_is_b = true;
+    loadCachePostFile(CACHE_POST_FILE_B);
+  } else if (valid_a) {
+    cache_store_is_b = false;
+    loadCachePostFile(CACHE_POST_FILE_A);
+  }
+}
+
+uint16_t MyMesh::cachePostCount() const {
+  uint16_t count = 0;
+  for (uint16_t i = 0; i < MAX_UNSYNCED_POSTS; i++) {
+    if (posts[i].post_timestamp != 0) count++;
+  }
+  return count;
+}
+
+PostInfo* MyMesh::cachePostAt(uint16_t chronological_idx) {
+  uint16_t count = cachePostCount();
+  if (chronological_idx >= count) return NULL;
+  uint16_t start = count == MAX_UNSYNCED_POSTS ? next_post_idx : 0;
+  return &posts[(start + chronological_idx) % MAX_UNSYNCED_POSTS];
+}
+
+bool MyMesh::saveCachePosts() {
+  const char* next_path = cache_store_is_b ? CACHE_POST_FILE_A : CACHE_POST_FILE_B;
+  File file = openCacheWrite(next_path);
+  if (!file) return false;
+
+  CachePostFileHeader header;
+  header.magic = CACHE_POST_MAGIC;
+  header.version = 1;
+  header.count = cachePostCount();
+  header.sequence = cache_store_sequence + 1;
+  header.checksum = cacheChecksum((const uint8_t*)&header, sizeof(header) - sizeof(header.checksum));
+  bool valid = file.write((const uint8_t*)&header, sizeof(header)) == sizeof(header);
+
+  for (uint16_t i = 0; valid && i < header.count; i++) {
+    PostInfo* post = cachePostAt(i);
+    CachePostRecord record;
+    memset(&record, 0, sizeof(record));
+    record.timestamp = post->post_timestamp;
+    memcpy(record.author, post->author.pub_key, PUB_KEY_SIZE);
+    StrHelper::strncpy(record.text, post->text, sizeof(record.text));
+    record.checksum = cacheChecksum((const uint8_t*)&record, sizeof(record) - sizeof(record.checksum));
+    valid = file.write((const uint8_t*)&record, sizeof(record)) == sizeof(record);
+  }
+  file.close();
+  if (valid) {
+    cache_store_sequence = header.sequence;
+    cache_store_is_b = !cache_store_is_b;
+  }
+  return valid;
+}
+
+void MyMesh::loadCacheSettings() {
+  cache_rssi_near = cache_rssi_far = cache_rssi_limit = 0;
+  cache_rssi_calibrated = false;
+  if (!_fs->exists(CACHE_SETTINGS_FILE)) return;
+  File file = _fs->open(CACHE_SETTINGS_FILE);
+  if (!file) return;
+  CacheSettingsRecord settings;
+  bool valid = file.read((uint8_t*)&settings, sizeof(settings)) == sizeof(settings);
+  file.close();
+  valid = valid && settings.magic == CACHE_SETTINGS_MAGIC && settings.version == 1;
+  valid = valid && settings.checksum == cacheChecksum((const uint8_t*)&settings, sizeof(settings) - sizeof(settings.checksum));
+  if (valid) {
+    cache_rssi_near = settings.near_rssi;
+    cache_rssi_far = settings.far_rssi;
+    cache_rssi_limit = settings.limit_rssi;
+    cache_rssi_calibrated = settings.calibrated != 0;
+  }
+}
+
+bool MyMesh::saveCacheSettings() {
+  File file = openCacheWrite(CACHE_SETTINGS_FILE);
+  if (!file) return false;
+  CacheSettingsRecord settings;
+  settings.magic = CACHE_SETTINGS_MAGIC;
+  settings.version = 1;
+  settings.near_rssi = cache_rssi_near;
+  settings.far_rssi = cache_rssi_far;
+  settings.limit_rssi = cache_rssi_limit;
+  settings.calibrated = cache_rssi_calibrated ? 1 : 0;
+  settings.checksum = cacheChecksum((const uint8_t*)&settings, sizeof(settings) - sizeof(settings.checksum));
+  bool valid = file.write((const uint8_t*)&settings, sizeof(settings)) == sizeof(settings);
+  file.close();
+  return valid;
+}
+#endif
+
 void MyMesh::addPost(ClientInfo *client, const char *postData) {
   storePost(client->id, postData);
 }
@@ -61,12 +260,19 @@ void MyMesh::storePost(const mesh::Identity &author, const char *postData) {
   MESH_DEBUG_PRINTLN("room.post: timestamp=%u", posts[idx].post_timestamp);
   next_post_idx = (next_post_idx + 1) % MAX_UNSYNCED_POSTS;
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+  saveCachePosts();
+#else
   next_push = futureMillis(PUSH_NOTIFY_DELAY_MILLIS);
+#endif
   _num_posted++; // stats
   MESH_DEBUG_PRINTLN("room.post: next_post_idx=%d num_posted=%d push scheduled", next_post_idx, _num_posted);
 }
 
 void MyMesh::pushPostToClient(ClientInfo *client, PostInfo &post) {
+#ifdef CACHE_INTERACTIVE_FEATURES
+  client->extra.room.cache_pending_advances_sync = 1;
+#endif
   MESH_DEBUG_PRINTLN("room.post: pushPostToClient text=%s", post.text);
   int len = 0;
   memcpy(&reply_data[len], &post.post_timestamp, 4);
@@ -111,7 +317,12 @@ uint8_t MyMesh::getUnsyncedCount(ClientInfo *client) {
   uint8_t count = 0;
   for (int k = 0; k < MAX_UNSYNCED_POSTS; k++) {
     if (posts[k].post_timestamp > client->extra.room.sync_since // is new post for this Client?
-        && !posts[k].author.matches(client->id)) {   // don't push posts to the author
+#ifdef CACHE_INTERACTIVE_FEATURES
+        && posts[k].post_timestamp <= client->extra.room.cache_sync_until
+#else
+        && !posts[k].author.matches(client->id)   // don't push posts to the author
+#endif
+        ) {
       count++;
     }
   }
@@ -124,7 +335,14 @@ bool MyMesh::processAck(const uint8_t *data) {
     if (client->extra.room.pending_ack && memcmp(data, &client->extra.room.pending_ack, 4) == 0) { // got an ACK from Client!
       client->extra.room.pending_ack = 0; // clear this, so next push can happen
       client->extra.room.push_failures = 0;
+#ifdef CACHE_INTERACTIVE_FEATURES
+      if (client->extra.room.cache_pending_advances_sync) {
+        client->extra.room.sync_since = client->extra.room.push_post_timestamp;
+      }
+      client->extra.room.cache_pending_advances_sync = 0;
+#else
       client->extra.room.sync_since = client->extra.room.push_post_timestamp; // advance Client's SINCE timestamp, to sync next post
+#endif
       return true;
     }
   }
@@ -147,6 +365,138 @@ File MyMesh::openAppend(const char *fname) {
   return _fs->open(fname, "a", true);
 #endif
 }
+
+#ifdef CACHE_INTERACTIVE_FEATURES
+bool MyMesh::isCacheDirectPacket(const mesh::Packet* packet, const ClientInfo* client) const {
+  if (packet->isRouteFlood()) return packet->getPathHashCount() == 0;
+  if (!packet->isRouteDirect()) return false;
+  if (client && client->out_path_len != OUT_PATH_UNKNOWN) {
+    return (client->out_path_len & 63) == 0;
+  }
+  return packet->getPathHashCount() == 0;
+}
+
+bool MyMesh::passesCacheRssi() const {
+  if (!cache_rssi_calibrated) return true;
+  return (int)radio_driver.getLastRSSI() >= (int)cache_rssi_limit;
+}
+
+void MyMesh::configureCachePage(ClientInfo* client, uint16_t offset) {
+  uint16_t count = cachePostCount();
+  if (count == 0) {
+    client->extra.room.sync_since = 0;
+    client->extra.room.cache_sync_until = 0;
+    client->extra.room.cache_page_offset = 0;
+    return;
+  }
+  if (offset >= count) offset = count > 0 ? count - 1 : 0;
+  uint16_t end = count > offset ? count - offset : 0;
+  uint16_t start = end > 3 ? end - 3 : 0;
+  PostInfo* first = cachePostAt(start);
+  PostInfo* last = cachePostAt(end - 1);
+  PostInfo* previous = start > 0 ? cachePostAt(start - 1) : NULL;
+  client->extra.room.sync_since = previous ? previous->post_timestamp : 0;
+  client->extra.room.cache_sync_until = last ? last->post_timestamp : 0;
+  client->extra.room.cache_page_offset = offset;
+  client->extra.room.pending_ack = 0;
+  client->extra.room.push_failures = 0;
+  (void)first;
+  next_push = futureMillis(PUSH_NOTIFY_DELAY_MILLIS);
+}
+
+void MyMesh::pushCacheInstructions(ClientInfo* client) {
+  PostInfo instructions;
+  instructions.author = self_id;
+  instructions.post_timestamp = getRTCClock()->getCurrentTimeUnique();
+  snprintf(instructions.text, sizeof(instructions.text),
+           "Welcome to %s. Showing 3 posts. Send !older, !newer, or !latest. Send any other message to add a post.",
+           _prefs.node_name);
+  pushPostToClient(client, instructions);
+  client->extra.room.cache_pending_advances_sync = 0;
+}
+
+int8_t MyMesh::medianClientRssi(const ClientInfo* client) const {
+  uint8_t count = client ? client->extra.room.cache_recent_rssi_count : 0;
+  if (count == 0) return (int8_t)radio_driver.getLastRSSI();
+  int8_t values[5];
+  for (uint8_t i = 0; i < count; i++) values[i] = client->extra.room.cache_recent_rssi[i];
+  for (uint8_t i = 1; i < count; i++) {
+    int8_t value = values[i];
+    int j = i - 1;
+    while (j >= 0 && values[j] > value) {
+      values[j + 1] = values[j];
+      j--;
+    }
+    values[j + 1] = value;
+  }
+  return values[count / 2];
+}
+
+bool MyMesh::handleCachePageCommand(ClientInfo* client, const char* text) {
+  if (strcmp(text, "!older") == 0) {
+    configureCachePage(client, client->extra.room.cache_page_offset + 3);
+    return true;
+  }
+  if (strcmp(text, "!newer") == 0) {
+    uint16_t offset = client->extra.room.cache_page_offset;
+    configureCachePage(client, offset > 3 ? offset - 3 : 0);
+    return true;
+  }
+  if (strcmp(text, "!latest") == 0) {
+    configureCachePage(client, 0);
+    return true;
+  }
+  return false;
+}
+
+bool MyMesh::handleCacheCLI(uint32_t sender_timestamp, ClientInfo* sender, const char* command, char* reply) {
+  if (strcmp(command, "rssi") == 0) {
+    if (cache_rssi_calibrated) {
+      snprintf(reply, MAX_POST_TEXT_LEN, "Near %d | Far %d | Limit %d dBm",
+               cache_rssi_near, cache_rssi_far, cache_rssi_limit);
+    } else {
+      strcpy(reply, "RSSI not calibrated. Use rssi near, then rssi far.");
+    }
+    return true;
+  }
+  if (strcmp(command, "rssi reset") == 0) {
+    if (sender_timestamp != 0) {
+      strcpy(reply, "ERR USB only");
+    } else {
+      cache_rssi_near = cache_rssi_far = cache_rssi_limit = 0;
+      cache_rssi_calibrated = false;
+      saveCacheSettings();
+      strcpy(reply, "OK");
+    }
+    return true;
+  }
+  if (strcmp(command, "rssi near") == 0 || strcmp(command, "rssi far") == 0) {
+    if (sender_timestamp == 0 || sender == NULL) {
+      strcpy(reply, "ERR radio only");
+      return true;
+    }
+    int8_t reading = medianClientRssi(sender);
+    if (strcmp(command, "rssi near") == 0) {
+      cache_rssi_near = reading;
+      cache_rssi_calibrated = false;
+      saveCacheSettings();
+      snprintf(reply, MAX_POST_TEXT_LEN, "Near %d dBm. Move to far point.", reading);
+    } else {
+      if (cache_rssi_near == 0) {
+        strcpy(reply, "ERR run rssi near first");
+      } else {
+        cache_rssi_far = reading;
+        cache_rssi_limit = reading - 3;
+        cache_rssi_calibrated = true;
+        saveCacheSettings();
+        snprintf(reply, MAX_POST_TEXT_LEN, "Far %d | Limit %d dBm", reading, cache_rssi_limit);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+#endif
 
 int MyMesh::handleRequest(ClientInfo *sender, uint32_t sender_timestamp, uint8_t *payload,
                           size_t payload_len) {
@@ -323,6 +673,9 @@ mesh::DispatcherAction MyMesh::onRecvPacket(mesh::Packet* pkt) {
 
 void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const mesh::Identity &sender,
                             uint8_t *data, size_t len) {
+#ifdef CACHE_INTERACTIVE_FEATURES
+  if (!isCacheDirectPacket(packet) || !passesCacheRssi()) return;
+#endif
   if (packet->getPayloadType() == PAYLOAD_TYPE_ANON_REQ) { // received an initial request by a possible admin
                                                            // client (unknown at this stage)
     uint32_t sender_timestamp, sender_sync_since;
@@ -378,6 +731,15 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
     if (packet->isRouteFlood()) {
       client->out_path_len = OUT_PATH_UNKNOWN;  // need to rediscover out_path
     }
+
+#ifdef CACHE_INTERACTIVE_FEATURES
+    memset(client->extra.room.cache_recent_rssi, 0, sizeof(client->extra.room.cache_recent_rssi));
+    client->extra.room.cache_recent_rssi[0] = (int8_t)radio_driver.getLastRSSI();
+    client->extra.room.cache_recent_rssi_count = 1;
+    client->extra.room.cache_recent_rssi_next = 1;
+    configureCachePage(client, 0);
+    client->extra.room.cache_intro_pending = 1;
+#endif
 
     uint32_t now = getRTCClock()->getCurrentTimeUnique();
     memcpy(reply_data, &now, 4); // response packets always prefixed with timestamp
@@ -438,6 +800,13 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
     return;
   }
   auto client = acl.getClientByIdx(i);
+#ifdef CACHE_INTERACTIVE_FEATURES
+  if (!isCacheDirectPacket(packet, client)) return;
+  uint8_t rssi_idx = client->extra.room.cache_recent_rssi_next % 5;
+  client->extra.room.cache_recent_rssi[rssi_idx] = (int8_t)radio_driver.getLastRSSI();
+  client->extra.room.cache_recent_rssi_next = (rssi_idx + 1) % 5;
+  if (client->extra.room.cache_recent_rssi_count < 5) client->extra.room.cache_recent_rssi_count++;
+#endif
   if (type == PAYLOAD_TYPE_TXT_MSG && len > 5) { // a CLI command or new Post
     uint32_t sender_timestamp;
     memcpy(&sender_timestamp, data, 4); // timestamp (by sender's RTC clock - which could be wrong)
@@ -468,7 +837,13 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
           if (is_retry) {
             temp[5] = 0; // no reply
           } else {
+#ifdef CACHE_INTERACTIVE_FEATURES
+            cache_cli_sender = client;
+#endif
             handleCommand(sender_timestamp, (char *)&data[5], (char *)&temp[5]);
+#ifdef CACHE_INTERACTIVE_FEATURES
+            cache_cli_sender = NULL;
+#endif
             temp[4] = (TXT_TYPE_CLI_DATA << 2); // attempt and flags,  (NOTE: legacy was: TXT_TYPE_PLAIN)
           }
           send_ack = false;
@@ -482,7 +857,13 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
           send_ack = false; // no ACK
         } else {
           if (!is_retry) {
+#ifdef CACHE_INTERACTIVE_FEATURES
+            if (!handleCachePageCommand(client, (const char *)&data[5])) {
+              addPost(client, (const char *)&data[5]);
+            }
+#else
             addPost(client, (const char *)&data[5]);
+#endif
           }
           temp[5] = 0; // no reply (ACK is enough)
           send_ack = true;
@@ -604,6 +985,9 @@ bool MyMesh::onPeerPathRecv(mesh::Packet *packet, int sender_idx, const uint8_t 
   int i = matching_peer_indexes[sender_idx];
 
   if (i >= 0 && i < acl.getNumClients()) { // get from our known_clients table (sender SHOULD already be known in this context)
+#ifdef CACHE_INTERACTIVE_FEATURES
+    if (!isCacheDirectPacket(packet) || (path_len & 63) != 0) return false;
+#endif
     MESH_DEBUG_PRINTLN("PATH to client, path_len=%d", (uint32_t)path_len);
     auto client = acl.getClientByIdx(i);
     client->out_path_len = mesh::Packet::copyPath(client->out_path, path, path_len); // store a copy of path, for sendDirect()
@@ -690,6 +1074,14 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   memset(posts, 0, sizeof(posts));
   _num_posted = _num_post_pushes = 0;
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+  cache_store_sequence = 0;
+  cache_store_is_b = false;
+  cache_rssi_near = cache_rssi_far = cache_rssi_limit = 0;
+  cache_rssi_calibrated = false;
+  cache_cli_sender = NULL;
+#endif
+
   memset(default_scope.key, 0, sizeof(default_scope.key));
 }
 
@@ -698,6 +1090,11 @@ void MyMesh::begin(FILESYSTEM *fs) {
   _fs = fs;
   // load persisted prefs
   _cli.loadPrefs(_fs);
+
+#ifdef CACHE_INTERACTIVE_FEATURES
+  loadCachePosts();
+  loadCacheSettings();
+#endif
 
   acl.load(_fs, self_id);
   region_map.load(_fs);
@@ -940,6 +1337,10 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     command += 3;
   }
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+  if (handleCacheCLI(sender_timestamp, cache_cli_sender, command, reply)) return;
+#endif
+
   // handle ACL related commands
   if (memcmp(command, "setperm ", 8) == 0) {   // format:  setperm {pubkey-hex} {permissions-int8}
     char* hex = &command[8];
@@ -1011,12 +1412,24 @@ void MyMesh::loop() {
     if (client->extra.room.pending_ack == 0 && client->last_activity != 0 &&
         client->extra.room.push_failures < 3) { // not already waiting for ACK, AND not evicted, AND retries not max
       MESH_DEBUG_PRINTLN("loop - checking for client %02X", (uint32_t)client->id.pub_key[0]);
+#ifdef CACHE_INTERACTIVE_FEATURES
+      if (client->extra.room.cache_intro_pending) {
+        client->extra.room.cache_intro_pending = 0;
+        pushCacheInstructions(client);
+        did_push = true;
+      }
+#endif
       uint32_t now = getRTCClock()->getCurrentTime();
-      for (int k = 0, idx = next_post_idx; k < MAX_UNSYNCED_POSTS; k++) {
+      for (int k = 0, idx = next_post_idx; !did_push && k < MAX_UNSYNCED_POSTS; k++) {
         auto p = &posts[idx];
         if (now >= p->post_timestamp + POST_SYNC_DELAY_SECS &&
             p->post_timestamp > client->extra.room.sync_since // is new post for this Client?
-            && !p->author.matches(client->id)) {   // don't push posts to the author
+#ifdef CACHE_INTERACTIVE_FEATURES
+            && p->post_timestamp <= client->extra.room.cache_sync_until
+#else
+            && !p->author.matches(client->id)   // don't push posts to the author
+#endif
+            ) {
           // push this post to Client, then wait for ACK
           pushPostToClient(client, *p);
           did_push = true;

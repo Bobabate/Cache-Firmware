@@ -69,6 +69,11 @@
   #define MAX_UNSYNCED_POSTS    32
 #endif
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+  #undef MAX_UNSYNCED_POSTS
+  #define MAX_UNSYNCED_POSTS    100
+#endif
+
 #ifndef SERVER_RESPONSE_DELAY
   #define SERVER_RESPONSE_DELAY   300
 #endif
@@ -118,6 +123,32 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   uint8_t pending_sf;
   uint8_t pending_cr;
   int  matching_peer_indexes[MAX_CLIENTS];
+
+#ifdef CACHE_INTERACTIVE_FEATURES
+  uint32_t cache_store_sequence;
+  bool cache_store_is_b;
+  int8_t cache_rssi_near, cache_rssi_far, cache_rssi_limit;
+  bool cache_rssi_calibrated;
+  ClientInfo* cache_cli_sender;
+
+  uint32_t cacheChecksum(const uint8_t* data, size_t len) const;
+  File openCacheWrite(const char* path);
+  bool inspectCachePostFile(const char* path, uint32_t& sequence, uint16_t& count);
+  bool loadCachePostFile(const char* path);
+  void loadCachePosts();
+  bool saveCachePosts();
+  void loadCacheSettings();
+  bool saveCacheSettings();
+  bool isCacheDirectPacket(const mesh::Packet* packet, const ClientInfo* client = NULL) const;
+  bool passesCacheRssi() const;
+  uint16_t cachePostCount() const;
+  PostInfo* cachePostAt(uint16_t chronological_idx);
+  void configureCachePage(ClientInfo* client, uint16_t offset);
+  void pushCacheInstructions(ClientInfo* client);
+  int8_t medianClientRssi(const ClientInfo* client) const;
+  bool handleCachePageCommand(ClientInfo* client, const char* text);
+  bool handleCacheCLI(uint32_t sender_timestamp, ClientInfo* sender, const char* command, char* reply);
+#endif
 
   void addPost(ClientInfo* client, const char* postData);
   void storePost(const mesh::Identity& author, const char* postData);

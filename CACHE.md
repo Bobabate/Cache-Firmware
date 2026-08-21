@@ -22,15 +22,39 @@ requiring a puzzle or separate game system.
 The exact radio placement, power, enclosure, antenna, and permission to install
 equipment remain open design decisions.
 
-## Version 1 scope
+## C1 baseline
 
-Version 1 is a branded, buildable MeshCore Room Server baseline. It intentionally
-adds no cache-specific interaction rules. This gives the project a small,
-testable starting point before access controls or game behaviour are designed.
+C1 is a branded, buildable MeshCore Room Server baseline. It intentionally adds
+no cache-specific interaction rules.
 
 The first hardware targets are the Heltec MeshPocket and Heltec WiFi LoRa 32
 V3. Their display, radio configuration, and power behaviour are inherited from
 the corresponding upstream MeshCore Room Server targets.
+
+## Next MeshPocket version
+
+The next version is intentionally limited to the MeshPocket. Its cache
+interaction is:
+
+- Store up to 100 posts in local flash and restore them after reboot or power
+  loss. Alternating, checksummed snapshots protect the previous valid copy if a
+  write is interrupted.
+- Do not automatically send a new post to connected or previously known
+  clients. Posts are returned only as part of a visitor's requested page.
+- Send a temporary instruction message first, followed by the newest three
+  posts. The instruction is not stored as a post.
+- Use `!older`, `!newer`, and `!latest` to move through posts three at a time.
+- Accept cache access only over a direct radio path. Routed and repeater paths
+  are rejected independently of all other settings.
+- Optionally require a calibrated minimum RSSI at login. Until calibration is
+  complete, direct access remains available so the owner can configure it.
+- Calibrate with `rssi near` beside the cache and `rssi far` at the desired
+  boundary. `rssi` reports the saved values, and USB-only `rssi reset` restores
+  an uncalibrated state.
+
+The RSSI limit is set three dB below the measured far point to tolerate modest
+signal variation. Real-world access will still vary with antenna orientation,
+obstructions, weather, and the visitor's radio.
 
 ## Required cache display
 
@@ -57,6 +81,5 @@ Cache-specific screen does not change the upstream Room Server display.
 
 ## Deferred ideas
 
-Direct-only access, zero-hop enforcement, a finder log, cache descriptions,
-hints, puzzles, and optional channel announcements are possible future features.
-They are not requirements for the baseline firmware.
+A structured finder log, cache descriptions, hints, puzzles, and optional
+channel announcements remain possible future features.

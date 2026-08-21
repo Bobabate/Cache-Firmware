@@ -15,18 +15,16 @@ installable firmware.
 
 ---
 
-Cache Firmware is a standalone MeshCore Room Server firmware project. Its
-first release is intentionally bare-bones: ordinary upstream Room Server
-behaviour, packaged and maintained as a separate project so cache-specific
-features can be added carefully later.
+Cache Firmware is a standalone MeshCore Room Server firmware project for
+location-based radio caches. It began with ordinary upstream Room Server
+behaviour and is adding the cache interaction carefully, one board at a time.
 
 **Cache Firmware** is the name of the reusable firmware. **Recursive Cache**
 is the working name of the first geocache installation; it is not the firmware
 or repository name.
 
-The first targets are the Heltec MeshPocket and Heltec WiFi LoRa 32 V3. Cache
-Firmware initially stores and distributes Room Server posts using the standard
-MeshCore client protocol.
+The current cache interaction is available on the Heltec MeshPocket only. The
+Heltec WiFi LoRa 32 V3 remains at the original C1 Room Server behaviour.
 
 ## Current scope
 
@@ -40,16 +38,36 @@ MeshCore client protocol.
 - Standard initial room password `hello`.
 - MeshPocket UF2/ZIP and Heltec V3 application/full-install BIN packages.
 
+The next MeshPocket version, currently unreleased, adds:
+
+- up to 100 posts preserved across ordinary reboots and power loss;
+- no automatic delivery of newly added posts to other clients;
+- a short instruction message when a visitor connects;
+- the newest three posts, with `!older`, `!newer`, and `!latest` navigation;
+- direct-radio-only access with no routed or repeater connections; and
+- an optional calibrated RSSI limit for controlling the usable distance.
+
 The current release is **v1.17.1-C1**.
 
 Change both public development passwords during provisioning. Normal
 application-image updates preserve stored device configuration. A merged image
 is intended for a clean/full installation and uses the compiled defaults.
 
+## RSSI calibration (next MeshPocket version)
+
+After connecting directly as administrator, stand beside the cache and send
+`rssi near`. Move to the farthest location that should work and send `rssi far`.
+The cache uses the median of recent direct packets and saves the resulting
+limit across reboots. Send `rssi` to view the readings. `rssi reset` is available
+over USB for recovery.
+
+The RSSI gate remains inactive until both calibration points are recorded.
+Direct-radio-only access is always enforced and is independent of RSSI.
+
 ## Not included yet
 
-Cache Firmware does not yet enforce direct or zero-hop access and does not add
-puzzles, hints, finder records, geocache commands, or channel announcements.
+Cache Firmware does not yet add puzzles, hints, structured finder records, or
+channel announcements.
 
 ## Build
 
