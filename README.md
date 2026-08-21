@@ -94,21 +94,6 @@ from a directly connected administrator.
 The RSSI gate remains inactive until both calibration points are recorded.
 Direct-radio-only access is always enforced and is independent of RSSI.
 
-## Build
-
-Install PlatformIO and run:
-
-```sh
-FIRMWARE_VERSION=v1.17.1-C5 ./build.sh build-firmware \
-  Cache_mesh_pocket_room_server
-
-FIRMWARE_VERSION=v1.17.1-C5 ./build.sh build-firmware \
-  Cache_heltec_v3_room_server
-```
-
-GitHub Actions can test either board or both. A version tag builds and publishes
-both board packages.
-
 ## Configure
 
 Use [config.meshcore.io](https://config.meshcore.io) to set the regional radio
