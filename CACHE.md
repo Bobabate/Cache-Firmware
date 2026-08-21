@@ -71,6 +71,11 @@ channel announcements remain possible future features.
 
 ## Todo
 
+- [ ] In the next Cache build, reorder the cache display so the configured
+  cache name is at the top, followed by battery level and find count, with the
+  complete Cache Firmware version on the bottom line. Preserve the existing
+  once-per-minute battery/display refresh behaviour.
+
 - [x] Fix generated `!help` and posting-limit replies by initializing their
   outgoing message type as `TXT_TYPE_PLAIN`, and add coverage confirming the
   companion displays both responses.
