@@ -49,6 +49,9 @@ Cache-specific screen does not change the upstream Room Server display.
 - Stay close to upstream MeshCore Room Server.
 - Keep cache-specific changes isolated and easy to review.
 - Preserve existing settings during application-image updates.
+- Do not compile an installation-specific cache name into reusable firmware.
+  Use the upstream board default until the owner configures a cache name.
+- Continue showing the configured cache name on the device display.
 - Treat merged images as clean/full installations.
 - Add hardware targets individually and validate each through GitHub Actions.
 

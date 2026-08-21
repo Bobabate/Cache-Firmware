@@ -33,7 +33,8 @@ MeshCore client protocol.
 - Upstream MeshCore Room Server behaviour.
 - Dedicated MeshPocket and Heltec V3 build targets.
 - Firmware identity `Cache v1.17.1-C1`.
-- Default node name `Recursive Cache`.
+- Ordinary upstream Room Server node names on clean installation; set the
+  cache's real name during configuration.
 - Upstream MeshCore radio defaults.
 - Standard initial administrator password `password`.
 - Standard initial room password `hello`.

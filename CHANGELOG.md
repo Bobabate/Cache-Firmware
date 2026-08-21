@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Remove the installation-specific `Recursive Cache` node name from firmware
+  defaults. Clean installs now use each board's upstream Room Server name until
+  the owner configures the actual cache name; configured names still appear on
+  the display.
+
 ## 1.17.1-C1 - 2026-08-20
 
 - Start Cache Firmware from upstream MeshCore v1.17.1 Room Server.
