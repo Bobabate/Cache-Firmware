@@ -1,5 +1,7 @@
 name: Build Cache Firmware
 
+# Mirrors Loon's board selector while adding tagged release publishing.
+
 on:
   workflow_dispatch:
     inputs:
