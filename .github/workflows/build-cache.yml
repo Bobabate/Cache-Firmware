@@ -31,7 +31,7 @@ jobs:
         id: matrix
         shell: bash
         env:
-          BOARD_CHOICE: ${{ github.event_name == 'push' && 'meshpocket' || inputs.boards }}
+          BOARD_CHOICE: ${{ github.event_name == 'push' && 'all' || inputs.boards }}
         run: |
           case "$BOARD_CHOICE" in
             all)
@@ -135,4 +135,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Cache Firmware ${GITHUB_REF_NAME}" \
-            --notes "MeshPocket-only Cache Firmware release based on MeshCore Room Server. Adds visible visitor replies, !edit, !found, and first-admin find notifications. Application updates preserve existing settings. Heltec V3 remains at v1.17.1-C1."
+            --notes "Cache Firmware release based on MeshCore Room Server for MeshPocket and Heltec V3. MeshPocket adds find acknowledgements, simplified first-admin notifications, and improved RSSI commands. Cache interaction remains MeshPocket-only; Heltec V3 retains baseline Room Server behaviour. Application updates preserve existing settings; merged Heltec V3 images are for clean/full installations."

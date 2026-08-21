@@ -32,9 +32,10 @@ interaction is:
   are rejected independently of all other settings.
 - Optionally require a calibrated minimum RSSI at login. Until calibration is
   complete, direct access remains available so the owner can configure it.
-- Calibrate with `rssi near` beside the cache and `rssi far` at the desired
-  boundary. `rssi` reports the saved values, and USB-only `rssi reset` restores
-  an uncalibrated state.
+- Use `rssi` to inspect the current median direct-radio reading without saving
+  it. Calibrate with `rssi near` beside the cache and `rssi far` at the desired
+  boundary. `rssi status` reports the saved values. `rssi reset` restores an
+  uncalibrated state over USB or from a directly connected administrator.
 
 The RSSI limit is set three dB below the measured far point to tolerate modest
 signal variation. Real-world access will still vary with antenna orientation,
@@ -92,6 +93,26 @@ channel announcements remain possible future features.
   help commands, or system messages. Notify only the first administrator to
   avoid duplicate mesh traffic; delivery does not need to be queued while the
   administrator is unreachable.
+- [x] Simplify the first-administrator notification to
+  `Cache found. Total finds: N.`
+- [x] Acknowledge every accepted visitor entry with
+  `Log saved. You are find #N.` For the first accepted find, add a distinct
+  congratulatory response: `Congratulations! You are the first to find this cache. Your log was saved.`
+- [x] Replace every Cache Firmware repository and
+  release link that still uses the former GitHub username `dchant` with
+  `Bobabate`, including README, installation guide, and website links. Verify
+  the published website and release links no longer return 404 errors.
+- [x] Make the radio-only `rssi` command report the median
+  RSSI of the requesting client's recent direct packets, for example
+  `Current RSSI: -87 dBm.` It must not save a near or far reading, change the
+  active RSSI limit, or otherwise alter calibration. Move the existing saved
+  near, far, and limit report to `rssi status`. Keep `rssi near` and `rssi far`
+  unchanged. Allow `rssi reset` over USB or over a direct radio connection from
+  an authenticated administrator; reject visitors and routed requests. A reset
+  clears the saved calibration and disables RSSI filtering while preserving
+  direct-radio-only access. Reply with
+  `OK. RSSI calibration cleared; RSSI filtering is disabled.` Update the
+  documentation and command tests for the new command meanings and permissions.
 
 ## C3 MeshPocket implementation
 

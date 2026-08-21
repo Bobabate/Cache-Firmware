@@ -222,7 +222,7 @@ void MyMesh::sendCachePrivateText(ClientInfo* client, const char* text) {
   sendFloodScoped(default_scope, reply, 0, _prefs.path_hash_mode + 1);
 }
 
-void MyMesh::notifyFirstCacheAdmin(ClientInfo* finder, const char* finder_name) {
+void MyMesh::notifyFirstCacheAdmin(ClientInfo* finder) {
   if (!finder || finder->isAdmin()) return;
   ClientInfo* admin = NULL;
   for (int i = 0; i < acl.getNumClients(); i++) {
@@ -234,8 +234,8 @@ void MyMesh::notifyFirstCacheAdmin(ClientInfo* finder, const char* finder_name) 
   }
   if (!admin) return;
   char message[MAX_POST_TEXT_LEN + 1];
-  snprintf(message, sizeof(message), "Cache found by %s. Total finds: %u.",
-           finder_name, (unsigned int)cachePostCount());
+  snprintf(message, sizeof(message), "Cache found. Total finds: %u.",
+           (unsigned int)cachePostCount());
   sendCachePrivateText(admin, message);
 }
 
@@ -389,7 +389,7 @@ void MyMesh::addPost(ClientInfo *client, const char *postData) {
   storePost(client->id, rendered);
   CacheVisitor* visitor = findCacheVisitor(client->id.pub_key, true);
   if (visitor) { visitor->last_post = getRTCClock()->getCurrentTime(); saveCacheVisitors(); }
-  notifyFirstCacheAdmin(client, visitor_name);
+  notifyFirstCacheAdmin(client);
 #else
   storePost(client->id, postData);
 #endif
@@ -689,23 +689,31 @@ bool MyMesh::handleCacheCLI(uint32_t sender_timestamp, ClientInfo* sender, const
     }
     return true;
   }
+  if (strcmp(command, "rssi status") == 0) {
+    cache::formatRssiStatus(cache_rssi_calibrated, cache_rssi_near,
+                            cache_rssi_far, cache_rssi_limit, reply,
+                            MAX_POST_TEXT_LEN);
+    return true;
+  }
   if (strcmp(command, "rssi") == 0) {
-    if (cache_rssi_calibrated) {
-      snprintf(reply, MAX_POST_TEXT_LEN, "Near %d | Far %d | Limit %d dBm",
-               cache_rssi_near, cache_rssi_far, cache_rssi_limit);
+    if (sender_timestamp == 0 || sender == NULL) {
+      strcpy(reply, "ERR radio only");
     } else {
-      strcpy(reply, "RSSI not calibrated. Use rssi near, then rssi far.");
+      cache::formatCurrentRssi(medianClientRssi(sender), reply,
+                               MAX_POST_TEXT_LEN);
     }
     return true;
   }
   if (strcmp(command, "rssi reset") == 0) {
-    if (sender_timestamp != 0) {
-      strcpy(reply, "ERR USB only");
+    bool is_usb = sender_timestamp == 0;
+    if (!cache::canResetRssi(is_usb, sender != NULL,
+                             sender && sender->isAdmin())) {
+      strcpy(reply, "ERR admin only");
     } else {
       cache_rssi_near = cache_rssi_far = cache_rssi_limit = 0;
       cache_rssi_calibrated = false;
       saveCacheSettings();
-      strcpy(reply, "OK");
+      strcpy(reply, "OK. RSSI calibration cleared; RSSI filtering is disabled.");
     }
     return true;
   }
@@ -938,9 +946,11 @@ void MyMesh::onAnonDataRecv(mesh::Packet *packet, const uint8_t *secret, const m
 
     data[len] = 0;                                        // ensure null terminator
 
-    CacheVisitor* visitor_record = findCacheVisitor(sender.pub_key, true);
     ClientInfo* client = NULL;
+#ifdef CACHE_INTERACTIVE_FEATURES
+    CacheVisitor* visitor_record = findCacheVisitor(sender.pub_key, true);
     bool returning_client = visitor_record && visitor_record->sync_since != 0;
+#endif
     if (data[8] == 0) {   // blank password, just check if sender is in ACL
       client = acl.getClient(sender.pub_key, PUB_KEY_SIZE);
       if (client == NULL) {
@@ -1127,6 +1137,9 @@ void MyMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx, 
                 strcpy((char *)&temp[5], "You already left a log entry in the last 24 hours. To edit it, send !edit <new log entry>.");
               } else {
                 addPost(client, (const char *)&data[5]);
+                cache::formatFindAcknowledgement(cachePostCount(),
+                                                 (char *)&temp[5],
+                                                 sizeof(temp) - 5);
               }
             }
 #else

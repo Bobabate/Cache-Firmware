@@ -4,7 +4,7 @@ You do not need to understand GitHub's folders to install Cache Firmware.
 
 ## Install or update Cache Firmware
 
-Open the **[Releases page](https://github.com/dchant/Cache-Firmware/releases)**.
+Open the **[Releases page](https://github.com/Bobabate/Cache-Firmware/releases)**.
 That is where finished firmware files live. Do not use GitHub's green **Code**
 button; it downloads source code, not installable firmware.
 
@@ -28,4 +28,4 @@ administrator and room passwords before deployment.
 - `variants/heltec_v3/platformio.ini` — Heltec V3 target
 
 When in doubt, return to the
-**[Releases page](https://github.com/dchant/Cache-Firmware/releases)**.
+**[Releases page](https://github.com/Bobabate/Cache-Firmware/releases)**.

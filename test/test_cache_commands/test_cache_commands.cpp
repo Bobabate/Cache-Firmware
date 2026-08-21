@@ -37,6 +37,48 @@ TEST(CacheEditCommand, LeavesOtherMessagesAlone) {
             cache::parseEditCommand("!editor", true, nullptr));
 }
 
+TEST(CacheFindAcknowledgement, CongratulatesFirstFinder) {
+  char reply[128];
+  cache::formatFindAcknowledgement(1, reply, sizeof(reply));
+  EXPECT_STREQ(
+      "Congratulations! You are the first to find this cache. Your log was saved.",
+      reply);
+}
+
+TEST(CacheFindAcknowledgement, ReportsFindNumber) {
+  char reply[64];
+  cache::formatFindAcknowledgement(12, reply, sizeof(reply));
+  EXPECT_STREQ("Log saved. You are find #12.", reply);
+}
+
+TEST(CacheRssiReset, AllowsUsbOrAuthenticatedRadioAdmin) {
+  EXPECT_TRUE(cache::canResetRssi(true, false, false));
+  EXPECT_TRUE(cache::canResetRssi(false, true, true));
+}
+
+TEST(CacheRssiReset, RejectsUnauthenticatedRadioRequests) {
+  EXPECT_FALSE(cache::canResetRssi(false, true, false));
+  EXPECT_FALSE(cache::canResetRssi(false, false, false));
+}
+
+TEST(CacheRssiCommand, ReportsCurrentReading) {
+  char reply[64];
+  cache::formatCurrentRssi(-87, reply, sizeof(reply));
+  EXPECT_STREQ("Current RSSI: -87 dBm.", reply);
+}
+
+TEST(CacheRssiStatus, ReportsSavedCalibration) {
+  char reply[96];
+  cache::formatRssiStatus(true, -40, -91, -94, reply, sizeof(reply));
+  EXPECT_STREQ("Near -40 | Far -91 | Limit -94 dBm", reply);
+}
+
+TEST(CacheRssiStatus, ReportsUncalibratedState) {
+  char reply[96];
+  cache::formatRssiStatus(false, 0, 0, 0, reply, sizeof(reply));
+  EXPECT_STREQ("RSSI not calibrated. Use rssi near, then rssi far.", reply);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

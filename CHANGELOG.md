@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.17.1-C5 - 2026-08-21
+
+- Acknowledge accepted entries with their find number and congratulate the
+  first finder with a distinct message.
+- Simplify first-administrator notifications to `Cache found. Total finds: N.`
+- Make `rssi` report the requesting radio's current median RSSI without saving
+  it, and move saved calibration details to `rssi status`.
+- Allow an authenticated administrator to run `rssi reset` over a direct radio
+  connection while retaining USB as the physical recovery path.
+- Update repository, release, installation, and website links for the Bobabate
+  GitHub username.
+- Publish current packages for both MeshPocket and Heltec V3. Interactive cache
+  behaviour remains MeshPocket-only; Heltec V3 retains baseline Room Server
+  behaviour.
+
 ## 1.17.1-C4 - 2026-08-21
 
 - Fix generated visitor replies so `!help` and posting-limit warnings display

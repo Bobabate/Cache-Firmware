@@ -75,9 +75,11 @@ void UITask::renderCurrScreen() {
   _display->setCursor(0, 40);
   _display->print(tmp);
 
+#ifdef CACHE_INTERACTIVE_FEATURES
   snprintf(tmp, sizeof(tmp), "Cache found %u times", _mesh ? _mesh->getCachePostCount() : 0);
   _display->setCursor(0, 55);
   _display->print(tmp);
+#endif
 #else
   if (millis() < BOOT_SCREEN_MILLIS) { // boot screen
     // meshcore logo

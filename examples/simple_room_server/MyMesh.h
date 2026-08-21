@@ -162,7 +162,7 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   PostInfo* cachePostAt(uint16_t chronological_idx);
   PostInfo* findCachePostByAuthor(const mesh::Identity& author);
   bool replaceCachePost(ClientInfo* client, const char* replacement);
-  void notifyFirstCacheAdmin(ClientInfo* finder, const char* finder_name);
+  void notifyFirstCacheAdmin(ClientInfo* finder);
   void sendCachePrivateText(ClientInfo* client, const char* text);
   void configureCachePage(ClientInfo* client, uint16_t offset);
   void configureCacheUnreadPage(ClientInfo* client, uint32_t sync_since);
