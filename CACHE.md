@@ -71,7 +71,7 @@ channel announcements remain possible future features.
 
 ## Todo
 
-- [ ] In the next Cache build, reorder the cache display so the configured
+- [x] Reorder the interactive MeshPocket cache display so the configured
   cache name is at the top, followed by a double-size `Finds: N` count, then
   battery level, with the complete Cache Firmware version on the bottom line.
   Use the shorter find-count label so it fits at double text size. Preserve the

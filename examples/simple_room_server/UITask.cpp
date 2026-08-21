@@ -59,10 +59,20 @@ void UITask::renderCurrScreen() {
   _display->setTextSize(1);
   _display->setColor(UIColor::primary_txt);
 
+#ifdef CACHE_INTERACTIVE_FEATURES
+  _display->drawTextEllipsized(0, 5, _display->width(), _node_prefs->node_name);
+
+  _display->setTextSize(2);
+  snprintf(tmp, sizeof(tmp), "Finds: %u", _mesh ? _mesh->getCachePostCount() : 0);
+  _display->setCursor(0, 32);
+  _display->print(tmp);
+  _display->setTextSize(1);
+#else
   _display->setCursor(0, 0);
   _display->print(_version_info);
 
   _display->drawTextEllipsized(0, 20, _display->width(), _node_prefs->node_name);
+#endif
 
   const int minMilliVolts = 3000;
   const int maxMilliVolts = 4200;
@@ -72,13 +82,16 @@ void UITask::renderCurrScreen() {
   if (batteryPercentage > 100) batteryPercentage = 100;
   snprintf(tmp, sizeof(tmp), "Battery: %d%%  %u.%02uV", batteryPercentage,
            batteryMilliVolts / 1000, (batteryMilliVolts % 1000) / 10);
+#ifdef CACHE_INTERACTIVE_FEATURES
+  _display->setCursor(0, 57);
+#else
   _display->setCursor(0, 40);
+#endif
   _display->print(tmp);
 
 #ifdef CACHE_INTERACTIVE_FEATURES
-  snprintf(tmp, sizeof(tmp), "Cache found %u times", _mesh ? _mesh->getCachePostCount() : 0);
-  _display->setCursor(0, 55);
-  _display->print(tmp);
+  _display->setCursor(0, 78);
+  _display->print(_version_info);
 #endif
 #else
   if (millis() < BOOT_SCREEN_MILLIS) { // boot screen

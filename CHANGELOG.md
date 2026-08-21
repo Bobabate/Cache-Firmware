@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.17.1-C6 - 2026-08-21
+
+- Reorder the interactive MeshPocket display with the configured cache name at
+  the top, a double-size `Finds: N` count, battery information below the count,
+  and the complete firmware version on the bottom line.
+- Publish MeshPocket UF2 and ZIP packages only. Heltec V3 remains at
+  `v1.17.1-C5`.
+
 ## 1.17.1-C5 - 2026-08-21
 
 - Acknowledge accepted entries with their find number and congratulate the
