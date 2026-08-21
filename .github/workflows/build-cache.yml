@@ -131,5 +131,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --repo "${GITHUB_REPOSITORY}" \
             --title "Cache Firmware ${GITHUB_REF_NAME}" \
             --notes "Cache Firmware for Heltec MeshPocket and Heltec WiFi LoRa 32 V3, based on MeshCore Room Server."
