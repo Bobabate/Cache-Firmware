@@ -16,7 +16,7 @@ installable firmware.
 ---
 
 Cache Firmware is a standalone MeshCore Room Server firmware project for
-location-based radio caches. Visitors connect directly over the mesh, read the
+location-based radio caches. Visitors connect directly by radio, read the
 recent finder log, and leave one log entry every 24 hours.
 
 The current MeshPocket release is **v1.17.1-C6**. Heltec V3 remains at
